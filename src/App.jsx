@@ -1,16 +1,19 @@
+import { useNavigate } from 'react-router-dom'
 import './App.css'
 
 function App() {
+  const navigate = useNavigate()
+
   const handleCreateEvent = () => {
-    alert('Crear evento - Próximamente')
+    navigate('/crear-evento')
   }
 
   const handleViewEvents = () => {
-    alert('Ver mis eventos - Próximamente')
+    navigate('/mis-eventos')
   }
 
   const handleManageCourse = () => {
-    alert('Administrar mi curso - Próximamente')
+    navigate('/mi-curso')
   }
 
   // Próximos eventos de ejemplo
