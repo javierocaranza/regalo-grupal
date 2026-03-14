@@ -1,14 +1,533 @@
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
+import { supabase } from '../supabase.js'
 import './pages.css'
 
 function MiCurso() {
   const navigate = useNavigate()
+  const [alumnos, setAlumnos] = useState([])
+  const [showForm, setShowForm] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [importMessage, setImportMessage] = useState('')
+  const fileInputRef = useRef(null)
+  const [currentStudent, setCurrentStudent] = useState({
+    id: null,
+    nombre: '',
+    fechaCumple: '',
+    nombrePadre: '',
+    telefonoPadreCode: '+56',
+    telefonoPadreNumber: '',
+    emailPadre: '',
+    nombreMadre: '',
+    telefonoMadreCode: '+56',
+    telefonoMadreNumber: '',
+    emailMadre: ''
+  })
+
+  const months = {
+    'enero': '01',
+    'febrero': '02',
+    'marzo': '03',
+    'abril': '04',
+    'mayo': '05',
+    'junio': '06',
+    'julio': '07',
+    'agosto': '08',
+    'septiembre': '09',
+    'octubre': '10',
+    'noviembre': '11',
+    'diciembre': '12'
+  }
+
+  const convertDateSpanishToISO = (dateStr) => {
+    if (!dateStr) return ''
+    const parts = dateStr.toLowerCase().trim().split(' ')
+    if (parts.length !== 2) return dateStr
+    const day = parts[0].padStart(2, '0')
+    const month = months[parts[1]]
+    if (!month) return dateStr
+    const year = 2024 // Asumir año 2024
+    return `${year}-${month}-${day}`
+  }
+
+  const cargarAlumnos = async () => {
+    const { data, error } = await supabase.from('alumnos').select('')
+    if (error) {
+      console.error('Error cargando alumnos:', error)
+      return []
+    }
+    return data || []
+  }
+
+  const importarAlumnos = async (alumnosArray) => {
+    const processedAlumnos = alumnosArray.map(alumno => ({
+      nombre: alumno.nombre,
+      fecha_cumpleanos: convertDateSpanishToISO(alumno.fechaCumple),
+      nombre_padre: alumno.nombrePadre,
+      telefono_padre: alumno.telefonoPadre,
+      email_padre: alumno.emailPadre,
+      nombre_madre: alumno.nombreMadre,
+      telefono_madre: alumno.telefonoMadre,
+      email_madre: alumno.emailMadre
+    }))
+
+    const { data, error } = await supabase.from('alumnos').insert(processedAlumnos)
+    if (error) {
+      console.error('Error importando alumnos:', error)
+      return false
+    }
+    return true
+  }
+
+  const mapDbToStudent = (row) => ({
+    id: row.id,
+    nombre: row.nombre || '',
+    fechaCumple: row.fecha_cumpleanos || '',
+    nombrePadre: row.nombre_padre || '',
+    telefonoPadre: row.telefono_padre || '',
+    emailPadre: row.email_padre || '',
+    nombreMadre: row.nombre_madre || '',
+    telefonoMadre: row.telefono_madre || '',
+    emailMadre: row.email_madre || ''
+  })
+
+  const mapStudentToDb = (student) => ({
+    nombre: student.nombre,
+    fecha_cumpleanos: student.fechaCumple,
+    nombre_padre: student.nombrePadre,
+    telefono_padre: student.telefonoPadre,
+    email_padre: student.emailPadre,
+    nombre_madre: student.nombreMadre,
+    telefono_madre: student.telefonoMadre,
+    email_madre: student.emailMadre
+  })
+
+  const isDuplicate = (student, list) => {
+    const normalizedName = (student.nombre || '').trim().toLowerCase()
+    return list.some(a => (a.nombre || '').trim().toLowerCase() === normalizedName)
+  }
+
+  // Cargar alumnos desde Supabase al montar el componente
+  useEffect(() => {
+    const fetchAlumnos = async () => {
+      const data = await cargarAlumnos()
+      setAlumnos(data.map(mapDbToStudent))
+    }
+    fetchAlumnos()
+  }, [])
+
+
+  const handleAddStudent = () => {
+    setCurrentStudent({
+      id: null,
+      nombre: '',
+      fechaCumple: '',
+      nombrePadre: '',
+      telefonoPadreCode: '+56',
+      telefonoPadreNumber: '',
+      emailPadre: '',
+      nombreMadre: '',
+      telefonoMadreCode: '+56',
+      telefonoMadreNumber: '',
+      emailMadre: ''
+    })
+    setIsEditing(false)
+    setShowForm(true)
+  }
+
+  const handleEditStudent = (student) => {
+    // Parsear teléfonos
+    const [padreCode, padreNumber] = student.telefonoPadre ? student.telefonoPadre.split(' ') : ['+56', '']
+    const [madreCode, madreNumber] = student.telefonoMadre ? student.telefonoMadre.split(' ') : ['+56', '']
+    setCurrentStudent({
+      ...student,
+      telefonoPadreCode: padreCode,
+      telefonoPadreNumber: padreNumber,
+      telefonoMadreCode: madreCode,
+      telefonoMadreNumber: madreNumber
+    })
+    setIsEditing(true)
+    setShowForm(true)
+  }
+
+  const handleDeleteStudent = async (id) => {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar este alumno?')) return
+
+    const { error } = await supabase.from('alumnos').delete().eq('id', id)
+    if (error) {
+      console.error('Error eliminando alumno en Supabase:', error)
+      return
+    }
+
+    setAlumnos(alumnos.filter(alumno => alumno.id !== id))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    const studentToSave = {
+      nombre: currentStudent.nombre.trim(),
+      fechaCumple: currentStudent.fechaCumple,
+      nombrePadre: currentStudent.nombrePadre.trim(),
+      telefonoPadre: `${currentStudent.telefonoPadreCode} ${currentStudent.telefonoPadreNumber}`,
+      emailPadre: currentStudent.emailPadre.trim(),
+      nombreMadre: currentStudent.nombreMadre.trim(),
+      telefonoMadre: `${currentStudent.telefonoMadreCode} ${currentStudent.telefonoMadreNumber}`,
+      emailMadre: currentStudent.emailMadre.trim()
+    }
+
+    if (!studentToSave.nombre) {
+      setImportMessage('El nombre del alumno es obligatorio.')
+      setTimeout(() => setImportMessage(''), 4000)
+      return
+    }
+
+    if (!isEditing && isDuplicate(studentToSave, alumnos)) {
+      setImportMessage('Ya existe un alumno con ese nombre.')
+      setTimeout(() => setImportMessage(''), 4000)
+      return
+    }
+
+    const dbRow = mapStudentToDb(studentToSave)
+
+    console.log('Guardando en Supabase:', dbRow)
+
+    if (isEditing) {
+      const { data, error } = await supabase
+        .from('alumnos')
+        .update(dbRow)
+        .eq('id', currentStudent.id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error actualizando alumno en Supabase:', error)
+        return
+      }
+
+      setAlumnos(alumnos.map(alumno =>
+        alumno.id === currentStudent.id ? mapDbToStudent(data) : alumno
+      ))
+    } else {
+      const { data, error } = await supabase
+        .from('alumnos')
+        .insert(dbRow)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error guardando alumno en Supabase:', error)
+        return
+      }
+
+      setAlumnos([...alumnos, mapDbToStudent(data)])
+    }
+
+    setShowForm(false)
+    setCurrentStudent({
+      id: null,
+      nombre: '',
+      fechaCumple: '',
+      nombrePadre: '',
+      telefonoPadreCode: '+56',
+      telefonoPadreNumber: '',
+      emailPadre: '',
+      nombreMadre: '',
+      telefonoMadreCode: '+56',
+      telefonoMadreNumber: '',
+      emailMadre: ''
+    })
+  }
+
+  const handleCancel = () => {
+    setShowForm(false)
+    setCurrentStudent({
+      id: null,
+      nombre: '',
+      fechaCumple: '',
+      nombrePadre: '',
+      telefonoPadreCode: '+56',
+      telefonoPadreNumber: '',
+      emailPadre: '',
+      nombreMadre: '',
+      telefonoMadreCode: '+56',
+      telefonoMadreNumber: '',
+      emailMadre: ''
+    })
+  }
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const fileType = file.name.split('.').pop().toLowerCase()
+    if (fileType === 'csv') {
+      Papa.parse(file, {
+        header: true,
+        delimiter: ';',
+        skipEmptyLines: true,
+        complete: async (results) => {
+          await processData(results.data)
+        }
+      })
+    } else if (fileType === 'xlsx') {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+        await processData(jsonData)
+      }
+      reader.readAsArrayBuffer(file)
+    }
+  }
+
+  const processData = async (data) => {
+    const rowsToInsert = data
+      .map(row => {
+        const nombre = row['nombre'] || row['Nombre'] || row['Nombre alumno'] || row['nombre alumno']
+        const fechaCumple = row['fecha_cumpleanos'] || row['fecha cumpleanos'] || row['fechaCumple'] || row['Cumpleaños']
+        const nombrePadre = row['nombre_padre'] || row['nombre padre'] || row['Nombre padre']
+        const telefonoPadre = row['telefono_padre'] || row['telefono padre'] || row['Telefono padre']
+        const emailPadre = row['email_padre'] || row['email padre'] || row['Email padre']
+        const nombreMadre = row['nombre_madre'] || row['nombre madre'] || row['Nombre madre']
+        const telefonoMadre = row['telefono_madre'] || row['telefono madre'] || row['Telefono madre']
+        const emailMadre = row['email_madre'] || row['email madre'] || row['Email madre']
+
+        const parseTelefono = (tel) => {
+          if (!tel) return { code: '+56', number: '' }
+          const parts = tel.toString().split(' ')
+          if (parts.length > 1 && parts[0].startsWith('+')) {
+            return { code: parts[0], number: parts.slice(1).join(' ') }
+          } else {
+            return { code: '+56', number: tel.toString() }
+          }
+        }
+
+        const padreTel = parseTelefono(telefonoPadre)
+        const madreTel = parseTelefono(telefonoMadre)
+
+        if (!nombre) return null
+
+        return {
+          nombre,
+          fechaCumple: convertDateSpanishToISO(fechaCumple),
+          nombrePadre,
+          telefonoPadre: `${padreTel.code} ${padreTel.number}`,
+          emailPadre,
+          nombreMadre,
+          telefonoMadre: `${madreTel.code} ${madreTel.number}`,
+          emailMadre
+        }
+      })
+      .filter(Boolean)
+
+    if (rowsToInsert.length === 0) {
+      setImportMessage('No se encontraron alumnos válidos para importar.')
+      setTimeout(() => setImportMessage(''), 5000)
+      return
+    }
+
+    const success = await importarAlumnos(rowsToInsert)
+    if (success) {
+      const data = await cargarAlumnos()
+      setAlumnos(data.map(mapDbToStudent))
+      setImportMessage(`Se importaron ${rowsToInsert.length} alumnos exitosamente.`)
+    } else {
+      setImportMessage('Error al importar alumnos.')
+    }
+    setTimeout(() => setImportMessage(''), 5000)
+  }
 
   return (
     <div className="page-container">
       <button className="back-btn" onClick={() => navigate('/')}>← Volver</button>
       <h1 className="page-title">Mi Curso</h1>
-      <p>Aquí puedes administrar tu curso</p>
+      <p>Administra los alumnos de tu curso</p>
+
+      <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
+        <button className="btn btn-primary" onClick={handleAddStudent} style={{ flex: 1 }}>
+          Agregar Alumno
+        </button>
+        <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>
+          Importar desde Excel/CSV
+        </button>
+      </div>
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".csv,.xlsx"
+        onChange={handleFileUpload}
+        style={{ display: 'none' }}
+      />
+      {importMessage && (
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#d4edda', color: '#155724', borderRadius: '8px', border: '1px solid #c3e6cb' }}>
+          {importMessage}
+        </div>
+      )}
+
+      {alumnos.length > 0 && (
+        <div className="upcoming-events" style={{ marginTop: '2rem' }}>
+          <h3 className="upcoming-title">Lista de Alumnos</h3>
+          <div className="events-list">
+            {alumnos.map(alumno => (
+              <div key={alumno.id} className="event-item">
+                <div className="event-name">{alumno.nombre}</div>
+                <div className="event-details">
+                  Cumpleaños: {alumno.fechaCumple} • Padre: {alumno.nombrePadre} ({alumno.telefonoPadre}) {alumno.emailPadre && `• ${alumno.emailPadre}`} • Madre: {alumno.nombreMadre} ({alumno.telefonoMadre}) {alumno.emailMadre && `• ${alumno.emailMadre}`}
+                </div>
+                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleEditStudent(alumno)}
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleDeleteStudent(alumno.id)}
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: '#ff6b6b', color: 'white', border: 'none' }}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="event-form">
+          <div className="form-section">
+            <h2 className="section-title">{isEditing ? 'Editar Alumno' : 'Agregar Alumno'}</h2>
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label htmlFor="nombre">Nombre del Alumno</label>
+                <input
+                  type="text"
+                  id="nombre"
+                  value={currentStudent.nombre}
+                  onChange={(e) => setCurrentStudent({ ...currentStudent, nombre: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="fechaCumple">Fecha de Cumpleaños</label>
+                <input
+                  type="date"
+                  id="fechaCumple"
+                  value={currentStudent.fechaCumple}
+                  onChange={(e) => setCurrentStudent({ ...currentStudent, fechaCumple: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="nombrePadre">Nombre del Padre</label>
+                <input
+                  type="text"
+                  id="nombrePadre"
+                  value={currentStudent.nombrePadre}
+                  onChange={(e) => setCurrentStudent({ ...currentStudent, nombrePadre: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="telefonoPadre">Teléfono del Padre</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select
+                    id="telefonoPadreCode"
+                    value={currentStudent.telefonoPadreCode}
+                    onChange={(e) => setCurrentStudent({ ...currentStudent, telefonoPadreCode: e.target.value })}
+                    style={{ width: 'auto', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '8px', fontFamily: 'inherit' }}
+                  >
+                    {countryCodes.map(code => (
+                      <option key={code.code} value={code.code}>
+                        {code.code} {code.country}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    id="telefonoPadreNumber"
+                    value={currentStudent.telefonoPadreNumber}
+                    onChange={(e) => setCurrentStudent({ ...currentStudent, telefonoPadreNumber: e.target.value })}
+                    placeholder="Número de teléfono"
+                    required
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="emailPadre">Email del Padre</label>
+                <input
+                  type="email"
+                  id="emailPadre"
+                  value={currentStudent.emailPadre}
+                  onChange={(e) => setCurrentStudent({ ...currentStudent, emailPadre: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="nombreMadre">Nombre de la Madre</label>
+                <input
+                  type="text"
+                  id="nombreMadre"
+                  value={currentStudent.nombreMadre}
+                  onChange={(e) => setCurrentStudent({ ...currentStudent, nombreMadre: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="telefonoMadre">Teléfono de la Madre</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select
+                    id="telefonoMadreCode"
+                    value={currentStudent.telefonoMadreCode}
+                    onChange={(e) => setCurrentStudent({ ...currentStudent, telefonoMadreCode: e.target.value })}
+                    style={{ width: 'auto', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '8px', fontFamily: 'inherit' }}
+                  >
+                    {countryCodes.map(code => (
+                      <option key={code.code} value={code.code}>
+                        {code.code} {code.country}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    id="telefonoMadreNumber"
+                    value={currentStudent.telefonoMadreNumber}
+                    onChange={(e) => setCurrentStudent({ ...currentStudent, telefonoMadreNumber: e.target.value })}
+                    placeholder="Número de teléfono"
+                    required
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="emailMadre">Email de la Madre</label>
+                <input
+                  type="email"
+                  id="emailMadre"
+                  value={currentStudent.emailMadre}
+                  onChange={(e) => setCurrentStudent({ ...currentStudent, emailMadre: e.target.value })}
+                />
+              </div>
+              <div className="form-row">
+                <button type="submit" className="form-submit">
+                  {isEditing ? 'Actualizar' : 'Agregar'}
+                </button>
+                <button type="button" className="form-submit" onClick={handleCancel} style={{ background: '#6c757d' }}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

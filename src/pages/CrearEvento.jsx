@@ -1,22 +1,37 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../supabase.js'
 import './pages.css'
 
 function CrearEvento() {
   const navigate = useNavigate()
+  const [alumnos, setAlumnos] = useState([])
+  const [selectedCumpleaneros, setSelectedCumpleaneros] = useState([])
   const [formData, setFormData] = useState({
-    cumpleaneros: '',
     fecha: '',
-    cuotaMinima: '',
-    cuotaMaxima: '',
-    participantesEsperados: '',
+    cuotaMinima: '10000',
+    cuotaMaxima: '15000',
     descripcion: '',
     coordinadorNombre: '',
     coordinadorRut: '',
     coordinadorBanco: '',
-    coordinadorCuenta: '',
+    coordinadorTipoCuenta: '',
+    coordinadorNumeroCuenta: '',
     coordinadorEmail: '',
   })
+
+  useEffect(() => {
+    const cargarAlumnos = async () => {
+      const { data, error } = await supabase.from('alumnos').select('id, nombre, fecha_cumpleanos')
+      if (error) {
+        console.error('Error cargando alumnos:', error)
+        return
+      }
+      setAlumnos(data || [])
+      console.log('Alumnos cargados:', data?.map(a => ({ id: a.id, type: typeof a.id })))
+    }
+    cargarAlumnos()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -26,21 +41,79 @@ function CrearEvento() {
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleCumpleaneroChange = (alumnoId) => {
+    console.log(`Toggle alumnoId: ${alumnoId} (${typeof alumnoId})`)
+    setSelectedCumpleaneros(prev => {
+      if (prev.includes(alumnoId)) {
+        return prev.filter(id => id !== alumnoId)
+      } else {
+        return [...prev, alumnoId]
+      }
+    })
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Formulario enviado:', formData)
+
+    if (selectedCumpleaneros.length === 0) {
+      alert('Debes seleccionar al menos un cumpleañero.')
+      return
+    }
+
+    const eventoData = {
+      fecha_evento: formData.fecha,
+      cuota_minima: parseFloat(formData.cuotaMinima),
+      cuota_maxima: parseFloat(formData.cuotaMaxima),
+      descripcion_regalo: formData.descripcion,
+      nombre_coordinador: formData.coordinadorNombre,
+      rut_coordinador: formData.coordinadorRut,
+      banco: formData.coordinadorBanco,
+      tipo_cuenta: formData.coordinadorTipoCuenta,
+      numero_cuenta: formData.coordinadorNumeroCuenta,
+      email_pago: formData.coordinadorEmail,
+    }
+
+    const { data, error: eventoError } = await supabase
+      .from('eventos')
+      .insert(eventoData)
+      .select('id')
+      .single()
+
+    if (eventoError) {
+      console.error('Error creando evento:', eventoError)
+      alert('Error al crear el evento.')
+      return
+    }
+
+    const eventoId = data.id
+
+    const cumpleanerosData = selectedCumpleaneros.map(alumnoId => ({
+      evento_id: eventoId,
+      alumno_id: alumnoId,
+    }))
+
+    const { error: cumpleanerosError } = await supabase
+      .from('cumpleaneros')
+      .insert(cumpleanerosData)
+
+    if (cumpleanerosError) {
+      console.error('Error agregando cumpleañeros:', cumpleanerosError)
+      alert('Evento creado, pero error al agregar cumpleañeros.')
+      return
+    }
+
     alert('¡Evento creado exitosamente!')
     navigate('/mis-eventos')
   }
 
-  // Calcular presupuesto estimado
+  // Calcular presupuesto estimado basado en cumpleañeros seleccionados
   const cuotaMinima = parseFloat(formData.cuotaMinima) || 0
   const cuotaMaxima = parseFloat(formData.cuotaMaxima) || 0
-  const participantes = parseInt(formData.participantesEsperados) || 0
+  const numCumpleaneros = selectedCumpleaneros.length
   
-  const presupuestoMinimo = cuotaMinima * participantes
-  const presupuestoMaximo = cuotaMaxima * participantes
-  const presupuestoPromedio = ((cuotaMinima + cuotaMaxima) / 2) * participantes
+  const presupuestoMinimo = cuotaMinima * numCumpleaneros
+  const presupuestoMaximo = cuotaMaxima * numCumpleaneros
+  const presupuestoPromedio = ((cuotaMinima + cuotaMaxima) / 2) * numCumpleaneros
 
   return (
     <div className="page-container">
@@ -53,17 +126,24 @@ function CrearEvento() {
           <h2 className="section-title">Detalles del Evento</h2>
           
           <div className="form-group">
-            <label htmlFor="cumpleaneros">Nombre del o los Cumpleañeros *</label>
-            <input
-              type="text"
-              id="cumpleaneros"
-              name="cumpleaneros"
-              value={formData.cumpleaneros}
-              onChange={handleChange}
-              placeholder="Ej: María, Juan y Pedro"
-              required
-            />
-            <small className="help-text">Puedes incluir varios nombres separados por comas</small>
+            <label>Seleccionar Cumpleañeros *</label>
+            <div className="cumpleaneros-list">
+              {alumnos.map(alumno => {
+                const isSelected = selectedCumpleaneros.includes(alumno.id)
+                console.log(`Alumno ${alumno.id} (${typeof alumno.id}) - Seleccionado: ${isSelected}`)
+                return (
+                  <div
+                    key={alumno.id}
+                    className={`cumpleanero-card ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleCumpleaneroChange(alumno.id)}
+                  >
+                    <div className="cumpleanero-name">{alumno.nombre}</div>
+                    <div className="cumpleanero-date">{new Date(alumno.fecha_cumpleanos).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}</div>
+                  </div>
+                )
+              })}
+            </div>
+            {alumnos.length === 0 && <p>Cargando alumnos...</p>}
           </div>
 
           <div className="form-group">
@@ -87,7 +167,7 @@ function CrearEvento() {
                 name="cuotaMinima"
                 value={formData.cuotaMinima}
                 onChange={handleChange}
-                placeholder="Ej: 5000"
+                placeholder="Ej: 10000"
                 min="0"
                 required
               />
@@ -101,31 +181,17 @@ function CrearEvento() {
                 name="cuotaMaxima"
                 value={formData.cuotaMaxima}
                 onChange={handleChange}
-                placeholder="Ej: 10000"
+                placeholder="Ej: 15000"
                 min="0"
                 required
               />
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="participantesEsperados">Número de Participantes Esperados *</label>
-            <input
-              type="number"
-              id="participantesEsperados"
-              name="participantesEsperados"
-              value={formData.participantesEsperados}
-              onChange={handleChange}
-              placeholder="Ej: 20"
-              min="1"
-              required
-            />
-          </div>
-
           {/* Presupuesto Estimado */}
-          {participantes > 0 && cuotaMinima > 0 && cuotaMaxima > 0 && (
+          {numCumpleaneros > 0 && cuotaMinima > 0 && cuotaMaxima > 0 && (
             <div className="budget-summary">
-              <h3>Presupuesto Estimado</h3>
+              <h3>Presupuesto Estimado (por cumpleañero)</h3>
               <div className="budget-row">
                 <span>Mínimo estimado:</span>
                 <span className="budget-value">${presupuestoMinimo.toLocaleString('es-CL')}</span>
@@ -207,12 +273,28 @@ function CrearEvento() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="coordinadorCuenta">Número de Cuenta *</label>
+            <label htmlFor="coordinadorTipoCuenta">Tipo de Cuenta *</label>
+            <select
+              id="coordinadorTipoCuenta"
+              name="coordinadorTipoCuenta"
+              value={formData.coordinadorTipoCuenta}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Selecciona tipo de cuenta</option>
+              <option value="Cuenta Corriente">Cuenta Corriente</option>
+              <option value="Cuenta Vista">Cuenta Vista</option>
+              <option value="Cuenta de Ahorro">Cuenta de Ahorro</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="coordinadorNumeroCuenta">Número de Cuenta *</label>
             <input
               type="text"
-              id="coordinadorCuenta"
-              name="coordinadorCuenta"
-              value={formData.coordinadorCuenta}
+              id="coordinadorNumeroCuenta"
+              name="coordinadorNumeroCuenta"
+              value={formData.coordinadorNumeroCuenta}
               onChange={handleChange}
               placeholder="Ej: 12345678"
               required
