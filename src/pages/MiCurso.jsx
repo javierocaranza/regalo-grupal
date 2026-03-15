@@ -25,6 +25,8 @@ function MiCurso() {
     telefonoMadreNumber: '',
     emailMadre: ''
   })
+  const [curso, setCurso] = useState({ nombre: '', anio: '' })
+  const [cursoGuardado, setCursoGuardado] = useState(false)
 
   const months = {
     'enero': '01',
@@ -104,6 +106,18 @@ function MiCurso() {
     email_madre: student.emailMadre
   })
 
+  const cargarCurso = async () => {
+    const { data, error } = await supabase.from('cursos').select('*').eq('id', 1)
+    if (error) {
+      console.error('Error cargando curso:', error)
+      return
+    }
+    if (data && data.length > 0) {
+      setCurso({ nombre: data[0].nombre || '', anio: data[0].anio || '' })
+      if (data[0].nombre) setCursoGuardado(true)
+    }
+  }
+
   const isDuplicate = (student, list) => {
     const normalizedName = (student.nombre || '').trim().toLowerCase()
     return list.some(a => (a.nombre || '').trim().toLowerCase() === normalizedName)
@@ -116,6 +130,7 @@ function MiCurso() {
       setAlumnos(data.map(mapDbToStudent))
     }
     fetchAlumnos()
+    cargarCurso()
   }, [])
 
 
@@ -258,6 +273,21 @@ function MiCurso() {
     })
   }
 
+  const handleSaveCurso = async () => {
+    if (!curso.nombre.trim() || !curso.anio) {
+      alert('Completa todos los campos')
+      return
+    }
+    const { data, error } = await supabase.from('cursos').insert({ nombre: curso.nombre, anio: parseInt(curso.anio) }).select('id').single()
+    if (error) {
+      console.error('Error guardando curso:', error)
+      alert('Error guardando el curso')
+      return
+    }
+    setCurso({ nombre: data.nombre, anio: data.anio })
+    setCursoGuardado(true)
+  }
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -345,7 +375,7 @@ function MiCurso() {
   return (
     <div className="page-container">
       <button className="back-btn" onClick={() => navigate('/')}>← Volver</button>
-      <h1 className="page-title">Mi Curso</h1>
+      <h1 className="page-title">{cursoGuardado ? `${curso.nombre} - ${curso.anio}` : 'Mi Curso'}</h1>
       <p>Administra los alumnos de tu curso</p>
 
       <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
@@ -366,6 +396,37 @@ function MiCurso() {
       {importMessage && (
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#d4edda', color: '#155724', borderRadius: '8px', border: '1px solid #c3e6cb' }}>
           {importMessage}
+        </div>
+      )}
+
+      {!cursoGuardado && (
+        <div style={{ marginTop: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px' }}>
+          <h3>Configurar Curso</h3>
+          <div>
+            <div className="form-group">
+              <label htmlFor="cursoNombre">Nombre del Curso</label>
+              <input
+                type="text"
+                id="cursoNombre"
+                value={curso.nombre}
+                onChange={(e) => setCurso({ ...curso, nombre: e.target.value })}
+                placeholder="ej: 4A"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="cursoAnio">Año</label>
+              <input
+                type="number"
+                id="cursoAnio"
+                value={curso.anio}
+                onChange={(e) => setCurso({ ...curso, anio: e.target.value })}
+                placeholder="ej: 2026"
+                required
+              />
+            </div>
+            <button type="button" className="btn btn-primary" onClick={handleSaveCurso}>Guardar</button>
+          </div>
         </div>
       )}
 
