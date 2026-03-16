@@ -6,6 +6,7 @@ import App from './App.jsx'
 import CrearEvento from './pages/CrearEvento.jsx'
 import MisEventos from './pages/MisEventos.jsx'
 import MiCurso from './pages/MiCurso.jsx'
+import DetalleEvento from './pages/DetalleEvento.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/crear-evento" element={<CrearEvento />} />
         <Route path="/mis-eventos" element={<MisEventos />} />
         <Route path="/mi-curso" element={<MiCurso />} />
+        <Route path="/evento/:id" element={<DetalleEvento />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
