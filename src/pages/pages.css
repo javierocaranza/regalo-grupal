@@ -244,3 +244,80 @@
   font-size: 0.9rem;
   opacity: 0.9;
 }
+
+.participacion-form,
+.participacion-ok,
+.comprobante-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.participacion-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.participacion-input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.participacion-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.pago-datos-card {
+  margin-top: 0.75rem;
+  padding: 0.9rem;
+  border-radius: 8px;
+  border: 1px solid #cfd5ff;
+  background: linear-gradient(135deg, #f7f8ff 0%, #fef9ff 100%);
+}
+
+.pago-datos-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #4f5fc8;
+  margin-bottom: 0.4rem;
+}
+
+.comprobante-link {
+  color: #4f5fc8;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.comprobante-link:hover {
+  text-decoration: underline;
+}
+
+.mensaje-ok,
+.mensaje-error {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.mensaje-ok {
+  color: #1f7a1f;
+}
+
+.mensaje-error {
+  color: #b42318;
+}
+
+.btn-small {
+  width: fit-content;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  align-self: flex-start;
+}
