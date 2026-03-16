@@ -321,3 +321,63 @@
   font-size: 0.8rem;
   align-self: flex-start;
 }
+
+.admin-panel {
+  border-top: 2px solid #667eea;
+}
+
+.admin-participante-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-acciones {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.btn-aprobar {
+  background: #1a7f4b;
+  color: white;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-aprobar:hover {
+  background: #155f39;
+}
+
+.btn-aprobar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-rechazar {
+  background: white;
+  color: #b42318;
+  border: 2px solid #b42318;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.btn-rechazar:hover {
+  background: #b42318;
+  color: white;
+}
+
+.btn-rechazar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

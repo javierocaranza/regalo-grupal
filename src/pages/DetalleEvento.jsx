@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import './pages.css'
 
 function DetalleEvento() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const location = useLocation()
+  const esAdmin = new URLSearchParams(location.search).get('admin') === 'true'
   const OTRO_INVITADO_VALUE = 'otro_externo'
   const [evento, setEvento] = useState(null)
   const [participantes, setParticipantes] = useState([])
@@ -20,6 +22,7 @@ function DetalleEvento() {
   const [errorFlujo, setErrorFlujo] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [actualizandoPagoId, setActualizandoPagoId] = useState(null)
 
   const storageBucket = 'comprobantes'
   const localStorageKey = `participacion_evento_${id}`
@@ -314,6 +317,32 @@ function DetalleEvento() {
     setMensajeFlujo('Comprobante subido exitosamente.')
   }
 
+  const cambiarEstadoPago = async (participanteId, nuevoEstado) => {
+    setActualizandoPagoId(participanteId)
+
+    const { data, error: updateError } = await supabase
+      .from('participantes')
+      .update({ estado: nuevoEstado })
+      .eq('id', participanteId)
+      .select('*')
+      .single()
+
+    setActualizandoPagoId(null)
+
+    if (updateError) {
+      console.error('Error actualizando estado de pago:', updateError)
+      return
+    }
+
+    setParticipantes((prev) =>
+      prev.map((p) =>
+        p.id === participanteId
+          ? { ...p, ...data }
+          : p
+      )
+    )
+  }
+
   const resetearParticipacionLocal = () => {
     setMiParticipacion(null)
     setSelectedParticipante('')
@@ -482,6 +511,55 @@ function DetalleEvento() {
               {errorFlujo && <p className="mensaje-error">{errorFlujo}</p>}
             </div>
           </div>
+
+          {esAdmin && (
+            <div className="upcoming-events admin-panel" style={{ marginTop: '1.5rem' }}>
+              <h3 className="upcoming-title">Panel coordinador — Comprobantes pendientes</h3>
+              {participantes.filter((p) => p.estado === 'comprobante_subido').length === 0 ? (
+                <p style={{ margin: 0 }}>No hay comprobantes pendientes de revision.</p>
+              ) : (
+                <div className="events-list">
+                  {participantes
+                    .filter((p) => p.estado === 'comprobante_subido')
+                    .map((participante) => (
+                      <div key={participante.id} className="event-item admin-participante-row">
+                        <div className="event-name">
+                          {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
+                        </div>
+                        {(participante.imagen_comprobante || participante.comprobante_url) && (
+                          <a
+                            href={participante.imagen_comprobante || participante.comprobante_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="comprobante-link"
+                          >
+                            Ver comprobante
+                          </a>
+                        )}
+                        <div className="admin-acciones">
+                          <button
+                            type="button"
+                            className="btn btn-aprobar"
+                            disabled={actualizandoPagoId === participante.id}
+                            onClick={() => cambiarEstadoPago(participante.id, 'pagado')}
+                          >
+                            {actualizandoPagoId === participante.id ? '...' : 'Aprobar pago'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-rechazar"
+                            disabled={actualizandoPagoId === participante.id}
+                            onClick={() => cambiarEstadoPago(participante.id, 'pendiente')}
+                          >
+                            {actualizandoPagoId === participante.id ? '...' : 'Rechazar'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
             <h3 className="upcoming-title">Participantes y Estado de Pago</h3>
