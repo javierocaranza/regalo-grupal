@@ -23,6 +23,12 @@ function DetalleEvento() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actualizandoPagoId, setActualizandoPagoId] = useState(null)
+  const [cerrandoLista, setCerrandoLista] = useState(false)
+  const [montoTotal, setMontoTotal] = useState('')
+  const [cuotaCalculada, setCuotaCalculada] = useState(null)
+  const [confirmandoCuota, setConfirmandoCuota] = useState(false)
+  const [errorAdmin, setErrorAdmin] = useState('')
+  const [mensajeAdmin, setMensajeAdmin] = useState('')
 
   const storageBucket = 'comprobantes'
   const localStorageKey = `participacion_evento_${id}`
@@ -343,6 +349,91 @@ function DetalleEvento() {
     )
   }
 
+  const cerrarLista = async () => {
+    setCerrandoLista(true)
+    setErrorAdmin('')
+    setMensajeAdmin('')
+
+    const eventoId = parseInt(id, 10)
+    const { data, error: updateError } = await supabase
+      .from('eventos')
+      .update({ estado: 'cerrado' })
+      .eq('id', eventoId)
+      .select('*')
+      .single()
+
+    setCerrandoLista(false)
+
+    if (updateError) {
+      console.error('Error cerrando lista:', updateError)
+      setErrorAdmin('No se pudo cerrar la lista de participantes.')
+      return
+    }
+
+    setEvento(data)
+    setMensajeAdmin('Lista de participantes cerrada exitosamente.')
+  }
+
+  const calcularCuota = () => {
+    setErrorAdmin('')
+    const monto = parseFloat(montoTotal)
+    if (!monto || monto <= 0) {
+      setErrorAdmin('Ingresa un monto total valido.')
+      return
+    }
+    if (participantes.length === 0) {
+      setErrorAdmin('No hay participantes para calcular la cuota.')
+      return
+    }
+    setCuotaCalculada(Math.ceil(monto / participantes.length))
+  }
+
+  const confirmarCuotaYPasarACobro = async () => {
+    if (!cuotaCalculada) {
+      setErrorAdmin('Primero calcula la cuota.')
+      return
+    }
+
+    setConfirmandoCuota(true)
+    setErrorAdmin('')
+    setMensajeAdmin('')
+
+    const eventoId = parseInt(id, 10)
+
+    const { data: eventoActualizado, error: eventoError } = await supabase
+      .from('eventos')
+      .update({ monto_total: parseFloat(montoTotal), estado: 'en_pago' })
+      .eq('id', eventoId)
+      .select('*')
+      .single()
+
+    if (eventoError) {
+      console.error('Error actualizando evento:', eventoError)
+      setConfirmandoCuota(false)
+      setErrorAdmin('No se pudo guardar el monto total en el evento.')
+      return
+    }
+
+    const { error: participantesError } = await supabase
+      .from('participantes')
+      .update({ cuota: cuotaCalculada })
+      .eq('evento_id', eventoId)
+
+    setConfirmandoCuota(false)
+
+    if (participantesError) {
+      console.error('Error actualizando cuotas:', participantesError)
+      setErrorAdmin('Monto guardado, pero no se pudieron actualizar las cuotas en participantes.')
+      return
+    }
+
+    setEvento(eventoActualizado)
+    setParticipantes((prev) => prev.map((p) => ({ ...p, cuota: cuotaCalculada })))
+    setMensajeAdmin(
+      `Cuota de $${cuotaCalculada.toLocaleString('es-CL')} confirmada. El evento paso a estado "en_pago".`
+    )
+  }
+
   const resetearParticipacionLocal = () => {
     setMiParticipacion(null)
     setSelectedParticipante('')
@@ -514,7 +605,87 @@ function DetalleEvento() {
 
           {esAdmin && (
             <div className="upcoming-events admin-panel" style={{ marginTop: '1.5rem' }}>
-              <h3 className="upcoming-title">Panel coordinador — Comprobantes pendientes</h3>
+              <h3 className="upcoming-title">Panel coordinador — Gestion del evento</h3>
+
+              <div className="admin-gestion-box">
+                {estadoEvento !== 'cerrado' && estadoEvento !== 'en_pago' && (
+                  <button
+                    type="button"
+                    className="btn btn-cerrar-lista"
+                    disabled={cerrandoLista}
+                    onClick={cerrarLista}
+                  >
+                    {cerrandoLista ? 'Cerrando...' : 'Cerrar lista de participantes'}
+                  </button>
+                )}
+
+                {(estadoEvento === 'cerrado' || estadoEvento === 'en_pago') && (
+                  <div className="cuota-box">
+                    <p className="admin-estado-badge">
+                      Estado: <strong>{estadoEvento}</strong> — {participantes.length} participante{participantes.length !== 1 ? 's' : ''} registrado{participantes.length !== 1 ? 's' : ''}
+                    </p>
+
+                    {estadoEvento === 'cerrado' && (
+                      <>
+                        <label htmlFor="montoTotal" className="participacion-label">
+                          Monto total del regalo ($)
+                        </label>
+                        <input
+                          id="montoTotal"
+                          type="number"
+                          min="1"
+                          className="participacion-input"
+                          placeholder="Ej: 50000"
+                          value={montoTotal}
+                          onChange={(e) => {
+                            setMontoTotal(e.target.value)
+                            setCuotaCalculada(null)
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-small"
+                          onClick={calcularCuota}
+                        >
+                          Calcular cuota
+                        </button>
+
+                        {cuotaCalculada !== null && (
+                          <div className="cuota-resultado">
+                            <span>Cuota por persona:</span>
+                            <strong>${cuotaCalculada.toLocaleString('es-CL')}</strong>
+                          </div>
+                        )}
+
+                        {cuotaCalculada !== null && (
+                          <button
+                            type="button"
+                            className="btn btn-aprobar"
+                            disabled={confirmandoCuota}
+                            onClick={confirmarCuotaYPasarACobro}
+                          >
+                            {confirmandoCuota ? 'Guardando...' : 'Confirmar cuota y pasar a cobro'}
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {estadoEvento === 'en_pago' && evento.monto_total && (
+                      <div className="cuota-resultado">
+                        <span>Cuota fijada:</span>
+                        <strong>
+                          ${Math.ceil(evento.monto_total / participantes.length).toLocaleString('es-CL')}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {mensajeAdmin && <p className="mensaje-ok" style={{ marginTop: '0.75rem' }}>{mensajeAdmin}</p>}
+                {errorAdmin && <p className="mensaje-error" style={{ marginTop: '0.75rem' }}>{errorAdmin}</p>}
+              </div>
+
+              <h3 className="upcoming-title" style={{ marginTop: '1.25rem' }}>Comprobantes pendientes</h3>
               {participantes.filter((p) => p.estado === 'comprobante_subido').length === 0 ? (
                 <p style={{ margin: 0 }}>No hay comprobantes pendientes de revision.</p>
               ) : (
