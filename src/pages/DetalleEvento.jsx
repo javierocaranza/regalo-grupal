@@ -17,7 +17,9 @@ function DetalleEvento() {
   const [nombreParticipante, setNombreParticipante] = useState('')
   const [confirmandoParticipacion, setConfirmandoParticipacion] = useState(false)
   const [subiendoComprobante, setSubiendoComprobante] = useState(false)
+  const [subiendoComprobanteDetalleId, setSubiendoComprobanteDetalleId] = useState(null)
   const [comprobanteFile, setComprobanteFile] = useState(null)
+  const [comprobanteFileSeleccionado, setComprobanteFileSeleccionado] = useState(null)
   const [mensajeFlujo, setMensajeFlujo] = useState('')
   const [errorFlujo, setErrorFlujo] = useState('')
   const [loading, setLoading] = useState(true)
@@ -27,8 +29,11 @@ function DetalleEvento() {
   const [montoTotal, setMontoTotal] = useState('')
   const [cuotaCalculada, setCuotaCalculada] = useState(null)
   const [confirmandoCuota, setConfirmandoCuota] = useState(false)
+  const [completandoEvento, setCompletandoEvento] = useState(false)
+  const [desinscribiendoId, setDesinscribiendoId] = useState(null)
   const [errorAdmin, setErrorAdmin] = useState('')
   const [mensajeAdmin, setMensajeAdmin] = useState('')
+  const [detalleParticipanteAbiertoId, setDetalleParticipanteAbiertoId] = useState(null)
 
   const storageBucket = 'comprobantes'
   const localStorageKey = `participacion_evento_${id}`
@@ -44,20 +49,32 @@ function DetalleEvento() {
     })
   }
 
+  const getEstadoNormalizado = (participante) => {
+    const estados = [
+      participante.estado,
+      participante.estado_pago,
+      participante.estadoPago,
+      participante.pagado
+    ]
+      .filter((value) => value !== null && value !== undefined)
+      .map((value) => String(value).toLowerCase().trim())
+
+    if (estados.includes('comprobante_subido')) return 'comprobante_subido'
+    if (estados.includes('pagado') || estados.includes('paid') || estados.includes('true') || estados.includes('1')) return 'pagado'
+    if (estados.includes('pendiente') || estados.includes('pending') || estados.includes('false') || estados.includes('0')) return 'pendiente'
+
+    return estados[0] || ''
+  }
+
   const formatEstadoPago = (participante) => {
-    const raw = (
-      participante.estado_pago ??
-      participante.estadoPago ??
-      participante.pagado ??
-      participante.estado ??
-      ''
-    )
+    const raw = participante.estado_pago ?? participante.estadoPago ?? participante.pagado ?? participante.estado ?? ''
 
     if (typeof raw === 'boolean') return raw ? 'Pagado' : 'Pendiente'
 
-    const normalized = String(raw).toLowerCase().trim()
+    const normalized = getEstadoNormalizado(participante)
     if (['pagado', 'paid', 'si', 'sí', 'true', '1'].includes(normalized)) return 'Pagado'
     if (['pendiente', 'pending', 'no', 'false', '0'].includes(normalized)) return 'Pendiente'
+    if (normalized === 'comprobante_subido') return 'Comprobante subido'
     return normalized ? raw : 'Pendiente'
   }
 
@@ -170,6 +187,11 @@ function DetalleEvento() {
   const cuotaMax = evento?.cuota_maxima ?? evento?.cuotaMaxima ?? evento?.cuota_max ?? '-'
   const estadoEvento = evento?.estado ?? 'Activo'
   const esInvitadoExterno = selectedParticipante === OTRO_INVITADO_VALUE
+  const alumnoSeleccionadoId =
+    !esInvitadoExterno && selectedParticipante ? parseInt(selectedParticipante, 10) : null
+  const participanteSeleccionado = alumnoSeleccionadoId
+    ? participantes.find((p) => Number(p.alumno_id) === alumnoSeleccionadoId)
+    : null
 
   const confirmarParticipacion = async () => {
     setErrorFlujo('')
@@ -206,9 +228,31 @@ function DetalleEvento() {
         nombre_participante: nombreManual
       }
     } else {
+      const alumnoId = parseInt(selectedParticipante, 10)
+
+      const { data: participantesExistentes, error: existenteError } = await supabase
+        .from('participantes')
+        .select('id')
+        .eq('evento_id', eventoId)
+        .eq('alumno_id', alumnoId)
+        .limit(1)
+
+      if (existenteError) {
+        console.error('Error validando participante existente:', existenteError)
+        setConfirmandoParticipacion(false)
+        setErrorFlujo('No se pudo validar si el alumno ya estaba registrado.')
+        return
+      }
+
+      if ((participantesExistentes || []).length > 0) {
+        setConfirmandoParticipacion(false)
+        setErrorFlujo('Este alumno ya está registrado')
+        return
+      }
+
       payload = {
         ...payloadBase,
-        alumno_id: parseInt(selectedParticipante, 10)
+        alumno_id: alumnoId
       }
     }
 
@@ -434,6 +478,34 @@ function DetalleEvento() {
     )
   }
 
+  const todosHanPagado =
+    participantes.length > 0 && participantes.every((p) => p.estado === 'pagado')
+
+  const marcarComoCompletado = async () => {
+    setCompletandoEvento(true)
+    setErrorAdmin('')
+    setMensajeAdmin('')
+
+    const eventoId = parseInt(id, 10)
+    const { data, error: updateError } = await supabase
+      .from('eventos')
+      .update({ estado: 'completado' })
+      .eq('id', eventoId)
+      .select('*')
+      .single()
+
+    setCompletandoEvento(false)
+
+    if (updateError) {
+      console.error('Error completando evento:', updateError)
+      setErrorAdmin('No se pudo marcar el evento como completado.')
+      return
+    }
+
+    setEvento(data)
+    setMensajeAdmin('🎉 ¡Evento completado! Todos los pagos fueron confirmados.')
+  }
+
   const resetearParticipacionLocal = () => {
     setMiParticipacion(null)
     setSelectedParticipante('')
@@ -442,6 +514,114 @@ function DetalleEvento() {
     setErrorFlujo('')
     setMensajeFlujo('Puedes registrar la participacion de otro apoderado.')
     window.localStorage.removeItem(localStorageKey)
+  }
+
+  const toggleDetalleParticipante = (participanteId) => {
+    setDetalleParticipanteAbiertoId((prev) => (prev === participanteId ? null : participanteId))
+  }
+
+  const desinscribirParticipante = async (participanteId) => {
+    setErrorAdmin('')
+    setMensajeAdmin('')
+    setErrorFlujo('')
+    setMensajeFlujo('')
+    setDesinscribiendoId(participanteId)
+
+    const { error: deleteError } = await supabase
+      .from('participantes')
+      .delete()
+      .eq('id', participanteId)
+
+    setDesinscribiendoId(null)
+
+    if (deleteError) {
+      console.error('Error desinscribiendo participante:', deleteError)
+      setErrorAdmin('No se pudo desinscribir al participante.')
+      setErrorFlujo('No se pudo desinscribir al participante.')
+      return
+    }
+
+    setParticipantes((prev) => prev.filter((p) => p.id !== participanteId))
+    if (detalleParticipanteAbiertoId === participanteId) {
+      setDetalleParticipanteAbiertoId(null)
+    }
+    if (miParticipacion?.id === participanteId) {
+      setMiParticipacion(null)
+      window.localStorage.removeItem(localStorageKey)
+    }
+    setMensajeAdmin('Participante desinscrito correctamente.')
+    setMensajeFlujo('Alumno desinscrito correctamente.')
+  }
+
+  const subirComprobanteSeleccionado = async (participante) => {
+    setErrorFlujo('')
+    setMensajeFlujo('')
+
+    if (!participante?.id) {
+      setErrorFlujo('No se pudo identificar al participante seleccionado.')
+      return
+    }
+
+    if (String(estadoEvento).toLowerCase() !== 'en_pago') {
+      setErrorFlujo('Solo puedes subir o cambiar comprobante cuando el evento está en pago.')
+      return
+    }
+
+    if (!comprobanteFileSeleccionado) {
+      setErrorFlujo('Selecciona una imagen para subir tu comprobante.')
+      return
+    }
+
+    if (!comprobanteFileSeleccionado.type.startsWith('image/')) {
+      setErrorFlujo('El archivo debe ser una imagen.')
+      return
+    }
+
+    const extension = comprobanteFileSeleccionado.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const nombreArchivo = `${id}/participante_${participante.id}_${Date.now()}.${extension}`
+
+    setSubiendoComprobanteDetalleId(participante.id)
+
+    const { error: uploadError } = await supabase.storage
+      .from(storageBucket)
+      .upload(nombreArchivo, comprobanteFileSeleccionado, { upsert: true })
+
+    if (uploadError) {
+      console.error('Error subiendo comprobante de participante seleccionado:', uploadError)
+      setSubiendoComprobanteDetalleId(null)
+      setErrorFlujo('No se pudo subir el comprobante. Intenta nuevamente.')
+      return
+    }
+
+    const { data: publicUrlData } = supabase.storage.from(storageBucket).getPublicUrl(nombreArchivo)
+    const urlComprobante = publicUrlData?.publicUrl || ''
+
+    const { data: participanteActualizado, error: updateError } = await supabase
+      .from('participantes')
+      .update({ imagen_comprobante: urlComprobante, estado: 'comprobante_subido' })
+      .eq('id', participante.id)
+      .select('*')
+      .single()
+
+    setSubiendoComprobanteDetalleId(null)
+
+    if (updateError) {
+      console.error('Error actualizando comprobante del participante seleccionado:', updateError)
+      setErrorFlujo('No se pudo guardar el comprobante en participantes.')
+      return
+    }
+
+    const participanteConNombre = {
+      ...participanteActualizado,
+      alumnoNombre: participante.alumnoNombre || participante.nombre_participante || 'Sin nombre'
+    }
+
+    setParticipantes((prev) => prev.map((p) => (p.id === participante.id ? participanteConNombre : p)))
+    if (miParticipacion?.id === participante.id) {
+      setMiParticipacion(participanteConNombre)
+    }
+    setComprobanteFileSeleccionado(null)
+    setMensajeFlujo('Comprobante actualizado correctamente para el alumno seleccionado.')
   }
 
   return (
@@ -528,11 +708,61 @@ function DetalleEvento() {
                     </>
                   )}
 
+                  {!esInvitadoExterno && participanteSeleccionado && (
+                    <div className="participante-detalle-box">
+                      <div className="event-details">Este alumno ya está inscrito en este evento.</div>
+                      <div className="event-details">Estado actual: {formatEstadoPago(participanteSeleccionado)}</div>
+
+                      {String(estadoEvento).toLowerCase() === 'en_pago' && (
+                        <>
+                          <label htmlFor="comprobanteSeleccionado" className="participacion-label">
+                            Subir o cambiar comprobante de este alumno
+                          </label>
+                          <input
+                            id="comprobanteSeleccionado"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setComprobanteFileSeleccionado(e.target.files?.[0] || null)}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={subiendoComprobanteDetalleId === participanteSeleccionado.id}
+                            onClick={() => subirComprobanteSeleccionado(participanteSeleccionado)}
+                          >
+                            {subiendoComprobanteDetalleId === participanteSeleccionado.id
+                              ? 'Subiendo...'
+                              : 'Subir / cambiar comprobante'}
+                          </button>
+                          {(participanteSeleccionado.imagen_comprobante || participanteSeleccionado.comprobante_url) && (
+                            <a
+                              href={participanteSeleccionado.imagen_comprobante || participanteSeleccionado.comprobante_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="comprobante-link"
+                            >
+                              Ver comprobante actual
+                            </a>
+                          )}
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-rechazar btn-small"
+                        disabled={desinscribiendoId === participanteSeleccionado.id}
+                        onClick={() => desinscribirParticipante(participanteSeleccionado.id)}
+                      >
+                        {desinscribiendoId === participanteSeleccionado.id ? 'Desinscribiendo...' : 'Desinscribir'}
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     className="btn btn-primary"
                     onClick={confirmarParticipacion}
-                    disabled={confirmandoParticipacion}
+                    disabled={confirmandoParticipacion || Boolean(participanteSeleccionado)}
                   >
                     {confirmandoParticipacion ? 'Confirmando...' : 'Confirmar mi participacion'}
                   </button>
@@ -678,57 +908,36 @@ function DetalleEvento() {
                         </strong>
                       </div>
                     )}
+
+                    {estadoEvento === 'en_pago' && (
+                      <div className="completar-box">
+                        {!todosHanPagado && (
+                          <p className="completar-aviso">
+                            Faltan {participantes.filter((p) => p.estado !== 'pagado').length} pago{participantes.filter((p) => p.estado !== 'pagado').length !== 1 ? 's' : ''} por aprobar.
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-completar"
+                          disabled={!todosHanPagado || completandoEvento}
+                          onClick={marcarComoCompletado}
+                        >
+                          {completandoEvento ? 'Guardando...' : 'Marcar como completado'}
+                        </button>
+                      </div>
+                    )}
+
+                    {estadoEvento === 'completado' && (
+                      <div className="completado-celebracion">
+                        🎉 ¡Evento completado! Todos los pagos fueron confirmados.
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {mensajeAdmin && <p className="mensaje-ok" style={{ marginTop: '0.75rem' }}>{mensajeAdmin}</p>}
                 {errorAdmin && <p className="mensaje-error" style={{ marginTop: '0.75rem' }}>{errorAdmin}</p>}
               </div>
-
-              <h3 className="upcoming-title" style={{ marginTop: '1.25rem' }}>Comprobantes pendientes</h3>
-              {participantes.filter((p) => p.estado === 'comprobante_subido').length === 0 ? (
-                <p style={{ margin: 0 }}>No hay comprobantes pendientes de revision.</p>
-              ) : (
-                <div className="events-list">
-                  {participantes
-                    .filter((p) => p.estado === 'comprobante_subido')
-                    .map((participante) => (
-                      <div key={participante.id} className="event-item admin-participante-row">
-                        <div className="event-name">
-                          {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
-                        </div>
-                        {(participante.imagen_comprobante || participante.comprobante_url) && (
-                          <a
-                            href={participante.imagen_comprobante || participante.comprobante_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="comprobante-link"
-                          >
-                            Ver comprobante
-                          </a>
-                        )}
-                        <div className="admin-acciones">
-                          <button
-                            type="button"
-                            className="btn btn-aprobar"
-                            disabled={actualizandoPagoId === participante.id}
-                            onClick={() => cambiarEstadoPago(participante.id, 'pagado')}
-                          >
-                            {actualizandoPagoId === participante.id ? '...' : 'Aprobar pago'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-rechazar"
-                            disabled={actualizandoPagoId === participante.id}
-                            onClick={() => cambiarEstadoPago(participante.id, 'pendiente')}
-                          >
-                            {actualizandoPagoId === participante.id ? '...' : 'Rechazar'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
             </div>
           )}
 
@@ -739,11 +948,84 @@ function DetalleEvento() {
             ) : (
               <div className="events-list">
                 {participantes.map((participante, index) => (
-                  <div key={participante.id ?? index} className="event-item">
+                  <div key={participante.id ?? index} className="event-item admin-participante-row">
                     <div className="event-name">
                       {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
                     </div>
-                    <div className="event-details">Estado de pago: {formatEstadoPago(participante)}</div>
+                    <div className="event-details">Estado: {formatEstadoPago(participante)}</div>
+
+                    {(participante.imagen_comprobante || participante.comprobante_url) && (
+                      <a
+                        href={participante.imagen_comprobante || participante.comprobante_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="comprobante-link"
+                      >
+                        Ver comprobante
+                      </a>
+                    )}
+
+                    {getEstadoNormalizado(participante) === 'comprobante_subido' && (
+                      <>
+                        {!(participante.imagen_comprobante || participante.comprobante_url) && (
+                          <div className="event-details">No hay URL de comprobante disponible.</div>
+                        )}
+                        {esAdmin && (
+                          <div className="admin-acciones">
+                            <button
+                              type="button"
+                              className="btn btn-aprobar"
+                              disabled={actualizandoPagoId === participante.id}
+                              onClick={() => cambiarEstadoPago(participante.id, 'pagado')}
+                            >
+                              {actualizandoPagoId === participante.id ? '...' : 'Aprobar'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-rechazar"
+                              disabled={actualizandoPagoId === participante.id}
+                              onClick={() => cambiarEstadoPago(participante.id, 'pendiente')}
+                            >
+                              {actualizandoPagoId === participante.id ? '...' : 'Rechazar'}
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {esAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn-rechazar btn-small"
+                        disabled={desinscribiendoId === participante.id}
+                        onClick={() => desinscribirParticipante(participante.id)}
+                      >
+                        {desinscribiendoId === participante.id ? 'Desinscribiendo...' : 'Desinscribir'}
+                      </button>
+                    )}
+
+                    {esAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={() => toggleDetalleParticipante(participante.id)}
+                      >
+                        {detalleParticipanteAbiertoId === participante.id ? 'Ocultar detalle' : 'Ver detalle'}
+                      </button>
+                    )}
+
+                    {esAdmin && detalleParticipanteAbiertoId === participante.id && (
+                      <div className="participante-detalle-box">
+                        <div className="event-details">
+                          ID participante: {participante.id}
+                        </div>
+                        <div className="event-details">
+                          Estado actual: {formatEstadoPago(participante)}
+                        </div>
+
+                        <div className="event-details">Revisa el comprobante y gestiona el estado directamente en la tarjeta principal.</div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

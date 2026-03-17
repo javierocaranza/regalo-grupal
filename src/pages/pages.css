@@ -439,3 +439,61 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.completar-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.completar-aviso {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.btn-completar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.65rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  width: fit-content;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.3);
+}
+
+.btn-completar:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-completar:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.completado-celebracion {
+  padding: 0.9rem 1rem;
+  background: linear-gradient(135deg, #d1fae5 0%, #ede9fe 100%);
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.participante-detalle-box {
+  margin-top: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
