@@ -141,6 +141,81 @@
   color: #999;
 }
 
+.ingreso-card {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #e6e8f6;
+  border-radius: 12px;
+  background: #fdfdff;
+}
+
+.ingreso-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #667eea;
+  margin: 0 0 0.6rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ingreso-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d7dcf7;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.ingreso-roles {
+  margin-top: 0.75rem;
+}
+
+.ingreso-error {
+  margin: 0.75rem 0 0 0;
+  color: #b42318;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ingreso-resumen {
+  width: 100%;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ingreso-resumen p {
+  margin: 0;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.btn-cambiar {
+  width: fit-content;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.ingreso-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ingreso-empty p {
+  margin: 0;
+  color: #666;
+}
+
+.btn-crear-curso-bottom {
+  margin-top: 0.9rem;
+  align-self: center;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 640px) {
   #root {
     padding: 1.5rem;

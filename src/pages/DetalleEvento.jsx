@@ -9,6 +9,8 @@ function DetalleEvento() {
   const location = useLocation()
   const esAdmin = new URLSearchParams(location.search).get('admin') === 'true'
   const OTRO_INVITADO_VALUE = 'otro_externo'
+  const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
+  const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const [evento, setEvento] = useState(null)
   const [participantes, setParticipantes] = useState([])
   const [miParticipacion, setMiParticipacion] = useState(null)
@@ -626,7 +628,10 @@ function DetalleEvento() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => navigate('/mis-eventos')}>
+      <button className="back-btn" onClick={() => {
+        const adminParam = esAdmin ? '?admin=true' : ''
+        navigate(`/mis-eventos${adminParam}`)
+      }}>
         ← Volver
       </button>
 
@@ -838,69 +843,71 @@ function DetalleEvento() {
               <h3 className="upcoming-title">Panel coordinador — Gestion del evento</h3>
 
               <div className="admin-gestion-box">
-                {estadoEvento !== 'cerrado' && estadoEvento !== 'en_pago' && (
+                {estadoEvento === 'abierto' && (
                   <button
                     type="button"
                     className="btn btn-cerrar-lista"
                     disabled={cerrandoLista}
                     onClick={cerrarLista}
                   >
-                    {cerrandoLista ? 'Cerrando...' : 'Cerrar lista de participantes'}
+                    {cerrandoLista ? 'Cerrando...' : 'Cerrar lista'}
                   </button>
                 )}
 
-                {(estadoEvento === 'cerrado' || estadoEvento === 'en_pago') && (
+                {estadoEvento === 'cerrado' && (
                   <div className="cuota-box">
                     <p className="admin-estado-badge">
                       Estado: <strong>{estadoEvento}</strong> — {participantes.length} participante{participantes.length !== 1 ? 's' : ''} registrado{participantes.length !== 1 ? 's' : ''}
                     </p>
+                    <label htmlFor="montoTotal" className="participacion-label">
+                      Monto total del regalo ($)
+                    </label>
+                    <input
+                      id="montoTotal"
+                      type="number"
+                      min="1"
+                      className="participacion-input"
+                      placeholder="Ej: 50000"
+                      value={montoTotal}
+                      onChange={(e) => {
+                        setMontoTotal(e.target.value)
+                        setCuotaCalculada(null)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={calcularCuota}
+                    >
+                      Calcular cuota
+                    </button>
 
-                    {estadoEvento === 'cerrado' && (
-                      <>
-                        <label htmlFor="montoTotal" className="participacion-label">
-                          Monto total del regalo ($)
-                        </label>
-                        <input
-                          id="montoTotal"
-                          type="number"
-                          min="1"
-                          className="participacion-input"
-                          placeholder="Ej: 50000"
-                          value={montoTotal}
-                          onChange={(e) => {
-                            setMontoTotal(e.target.value)
-                            setCuotaCalculada(null)
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-small"
-                          onClick={calcularCuota}
-                        >
-                          Calcular cuota
-                        </button>
-
-                        {cuotaCalculada !== null && (
-                          <div className="cuota-resultado">
-                            <span>Cuota por persona:</span>
-                            <strong>${cuotaCalculada.toLocaleString('es-CL')}</strong>
-                          </div>
-                        )}
-
-                        {cuotaCalculada !== null && (
-                          <button
-                            type="button"
-                            className="btn btn-aprobar"
-                            disabled={confirmandoCuota}
-                            onClick={confirmarCuotaYPasarACobro}
-                          >
-                            {confirmandoCuota ? 'Guardando...' : 'Confirmar cuota y pasar a cobro'}
-                          </button>
-                        )}
-                      </>
+                    {cuotaCalculada !== null && (
+                      <div className="cuota-resultado">
+                        <span>Cuota por persona:</span>
+                        <strong>${cuotaCalculada.toLocaleString('es-CL')}</strong>
+                      </div>
                     )}
 
-                    {estadoEvento === 'en_pago' && evento.monto_total && (
+                    {cuotaCalculada !== null && (
+                      <button
+                        type="button"
+                        className="btn btn-aprobar"
+                        disabled={confirmandoCuota}
+                        onClick={confirmarCuotaYPasarACobro}
+                      >
+                        {confirmandoCuota ? 'Guardando...' : 'Confirmar cuota y pasar a cobro'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {estadoEvento === 'en_pago' && (
+                  <div className="cuota-box">
+                    <p className="admin-estado-badge">
+                      Estado: <strong>{estadoEvento}</strong> — {participantes.length} participante{participantes.length !== 1 ? 's' : ''} registrado{participantes.length !== 1 ? 's' : ''}
+                    </p>
+                    {evento.monto_total && (
                       <div className="cuota-resultado">
                         <span>Cuota fijada:</span>
                         <strong>
@@ -908,30 +915,27 @@ function DetalleEvento() {
                         </strong>
                       </div>
                     )}
+                    <div className="completar-box">
+                      {!todosHanPagado && (
+                        <p className="completar-aviso">
+                          Faltan {participantes.filter((p) => p.estado !== 'pagado').length} pago{participantes.filter((p) => p.estado !== 'pagado').length !== 1 ? 's' : ''} por aprobar.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-completar"
+                        disabled={!todosHanPagado || completandoEvento}
+                        onClick={marcarComoCompletado}
+                      >
+                        {completandoEvento ? 'Guardando...' : 'Marcar como completado'}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                    {estadoEvento === 'en_pago' && (
-                      <div className="completar-box">
-                        {!todosHanPagado && (
-                          <p className="completar-aviso">
-                            Faltan {participantes.filter((p) => p.estado !== 'pagado').length} pago{participantes.filter((p) => p.estado !== 'pagado').length !== 1 ? 's' : ''} por aprobar.
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          className="btn btn-completar"
-                          disabled={!todosHanPagado || completandoEvento}
-                          onClick={marcarComoCompletado}
-                        >
-                          {completandoEvento ? 'Guardando...' : 'Marcar como completado'}
-                        </button>
-                      </div>
-                    )}
-
-                    {estadoEvento === 'completado' && (
-                      <div className="completado-celebracion">
-                        🎉 ¡Evento completado! Todos los pagos fueron confirmados.
-                      </div>
-                    )}
+                {estadoEvento === 'completado' && (
+                  <div className="completado-celebracion">
+                    🎉 ¡Evento completado! Todos los pagos fueron confirmados.
                   </div>
                 )}
 

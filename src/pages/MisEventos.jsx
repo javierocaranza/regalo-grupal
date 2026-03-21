@@ -5,6 +5,8 @@ import './pages.css'
 
 function MisEventos() {
   const navigate = useNavigate()
+  const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
+  const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const [eventos, setEventos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -98,7 +100,13 @@ function MisEventos() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => navigate('/')}>
+      <button className="back-btn" onClick={() => {
+        const params = new URLSearchParams()
+        if (rolIngreso) params.append('rol', rolIngreso)
+        if (cursoIdActivo) params.append('cursoId', cursoIdActivo)
+        const query = params.toString()
+        navigate(`/${query ? '?' + query : ''}`)
+      }}>
         ← Volver
       </button>
 
@@ -149,7 +157,10 @@ function MisEventos() {
                   <div style={{ marginTop: '0.75rem' }}>
                     <button
                       className="btn btn-secondary"
-                      onClick={() => navigate(`/evento/${evento.id}`)}
+                      onClick={() => {
+                        const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
+                        navigate(`/evento/${evento.id}${adminParam}`)
+                      }}
                       style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
                     >
                       Ver detalle

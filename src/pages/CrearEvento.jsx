@@ -5,6 +5,8 @@ import './pages.css'
 
 function CrearEvento() {
   const navigate = useNavigate()
+  const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
+  const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const [alumnos, setAlumnos] = useState([])
   const [selectedCumpleaneros, setSelectedCumpleaneros] = useState([])
   const [formData, setFormData] = useState({
@@ -103,7 +105,8 @@ function CrearEvento() {
     }
 
     alert('¡Evento creado exitosamente!')
-    navigate('/mis-eventos')
+    const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
+    navigate(`/mis-eventos${adminParam}`)
   }
 
   // Calcular presupuesto estimado basado en cumpleañeros seleccionados
@@ -117,7 +120,15 @@ function CrearEvento() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => navigate('/')}>← Volver</button>
+      <button className="back-btn" onClick={() => {
+        const params = new URLSearchParams()
+        if (rolIngreso) params.append('rol', rolIngreso)
+        if (cursoIdActivo) params.append('cursoId', cursoIdActivo)
+        const query = params.toString()
+        navigate(`/${query ? '?' + query : ''}`)
+      }}>
+        ← Volver
+      </button>
       <h1 className="page-title">Crear Evento</h1>
       
       <form className="event-form" onSubmit={handleSubmit}>

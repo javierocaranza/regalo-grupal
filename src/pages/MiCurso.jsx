@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { supabase } from '../supabase.js'
@@ -7,6 +7,11 @@ import './pages.css'
 
 function MiCurso() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const esNuevoCurso = searchParams.get('nuevo') === 'true'
+  const cursoIdParam = searchParams.get('cursoId') || window.localStorage.getItem('curso_id_activo')
+  const cursoIdActivo = cursoIdParam ? parseInt(cursoIdParam, 10) : null
   const [alumnos, setAlumnos] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -27,6 +32,20 @@ function MiCurso() {
   })
   const [curso, setCurso] = useState({ nombre: '', anio: '' })
   const [cursoGuardado, setCursoGuardado] = useState(false)
+
+  const handleVolver = () => {
+    const rolActivo = window.localStorage.getItem('rol_ingreso_activo')
+    const cursoActivo = window.localStorage.getItem('curso_id_activo')
+
+    if (!rolActivo) {
+      navigate('/')
+      return
+    }
+
+    const params = new URLSearchParams({ rol: rolActivo })
+    if (cursoActivo) params.set('cursoId', cursoActivo)
+    navigate(`/?${params.toString()}`)
+  }
 
   const months = {
     'enero': '01',
@@ -54,16 +73,31 @@ function MiCurso() {
     return `${year}-${month}-${day}`
   }
 
-  const cargarAlumnos = async () => {
-    const { data, error } = await supabase.from('alumnos').select('')
+  const cargarAlumnos = async (cursoId) => {
+    if (cursoId) {
+      const { data, error } = await supabase
+        .from('alumnos')
+        .select('*')
+        .eq('curso_id', cursoId)
+
+      if (!error) return data || []
+      console.warn('No se pudo filtrar alumnos por curso_id, usando fallback:', error)
+    }
+
+    const { data, error } = await supabase.from('alumnos').select('*')
     if (error) {
       console.error('Error cargando alumnos:', error)
       return []
     }
+
+    if (cursoId) {
+      return (data || []).filter((row) => Number(row.curso_id) === Number(cursoId))
+    }
+
     return data || []
   }
 
-  const importarAlumnos = async (alumnosArray) => {
+  const importarAlumnos = async (alumnosArray, cursoId) => {
     const processedAlumnos = alumnosArray.map(alumno => ({
       nombre: alumno.nombre,
       fecha_cumpleanos: convertDateSpanishToISO(alumno.fechaCumple),
@@ -72,7 +106,8 @@ function MiCurso() {
       email_padre: alumno.emailPadre,
       nombre_madre: alumno.nombreMadre,
       telefono_madre: alumno.telefonoMadre,
-      email_madre: alumno.emailMadre
+      email_madre: alumno.emailMadre,
+      curso_id: cursoId || null
     }))
 
     const { data, error } = await supabase.from('alumnos').insert(processedAlumnos)
@@ -103,11 +138,18 @@ function MiCurso() {
     email_padre: student.emailPadre,
     nombre_madre: student.nombreMadre,
     telefono_madre: student.telefonoMadre,
-    email_madre: student.emailMadre
+    email_madre: student.emailMadre,
+    curso_id: cursoIdActivo || null
   })
 
-  const cargarCurso = async () => {
-    const { data, error } = await supabase.from('cursos').select('*').eq('id', 1)
+  const cargarCurso = async (cursoId) => {
+    if (!cursoId) {
+      setCurso({ nombre: '', anio: '' })
+      setCursoGuardado(false)
+      return
+    }
+
+    const { data, error } = await supabase.from('cursos').select('*').eq('id', cursoId)
     if (error) {
       console.error('Error cargando curso:', error)
       return
@@ -115,7 +157,11 @@ function MiCurso() {
     if (data && data.length > 0) {
       setCurso({ nombre: data[0].nombre || '', anio: data[0].anio || '' })
       if (data[0].nombre) setCursoGuardado(true)
+      return
     }
+
+    setCurso({ nombre: '', anio: '' })
+    setCursoGuardado(false)
   }
 
   const isDuplicate = (student, list) => {
@@ -126,12 +172,20 @@ function MiCurso() {
   // Cargar alumnos desde Supabase al montar el componente
   useEffect(() => {
     const fetchAlumnos = async () => {
-      const data = await cargarAlumnos()
+      const data = await cargarAlumnos(cursoIdActivo)
       setAlumnos(data.map(mapDbToStudent))
     }
+
+    if (esNuevoCurso) {
+      setCurso({ nombre: '', anio: '' })
+      setCursoGuardado(false)
+      fetchAlumnos()
+      return
+    }
+
     fetchAlumnos()
-    cargarCurso()
-  }, [])
+    cargarCurso(cursoIdActivo)
+  }, [esNuevoCurso, cursoIdActivo])
 
 
   const handleAddStudent = () => {
@@ -278,14 +332,20 @@ function MiCurso() {
       alert('Completa todos los campos')
       return
     }
-    const { data, error } = await supabase.from('cursos').insert({ nombre: curso.nombre, anio: parseInt(curso.anio) }).select('id').single()
+    const { data, error } = await supabase
+      .from('cursos')
+      .insert({ nombre: curso.nombre, anio: parseInt(curso.anio) })
+      .select('id, nombre, anio')
+      .single()
     if (error) {
       console.error('Error guardando curso:', error)
       alert('Error guardando el curso')
       return
     }
+    window.localStorage.setItem('curso_id_activo', String(data.id))
     setCurso({ nombre: data.nombre, anio: data.anio })
     setCursoGuardado(true)
+    navigate(`/mi-curso?cursoId=${data.id}`)
   }
 
   const handleFileUpload = (e) => {
@@ -361,9 +421,9 @@ function MiCurso() {
       return
     }
 
-    const success = await importarAlumnos(rowsToInsert)
+    const success = await importarAlumnos(rowsToInsert, cursoIdActivo)
     if (success) {
-      const data = await cargarAlumnos()
+      const data = await cargarAlumnos(cursoIdActivo)
       setAlumnos(data.map(mapDbToStudent))
       setImportMessage(`Se importaron ${rowsToInsert.length} alumnos exitosamente.`)
     } else {
@@ -374,7 +434,7 @@ function MiCurso() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => navigate('/')}>← Volver</button>
+      <button className="back-btn" onClick={handleVolver}>← Volver</button>
       <h1 className="page-title">{cursoGuardado ? `${curso.nombre} - ${curso.anio}` : 'Mi Curso'}</h1>
       <p>Administra los alumnos de tu curso</p>
 
