@@ -78,7 +78,19 @@ function MisEventos() {
         return
       }
 
-      setEventos(data || [])
+      const eventosBase = data || []
+
+      const eventosConCumpleaneros = await Promise.all(
+        eventosBase.map(async (evento) => {
+          const { data: cumpleanerosData } = await supabase
+            .from('cumpleaneros')
+            .select('alumno_id, alumnos(nombre)')
+            .eq('evento_id', evento.id)
+          return { ...evento, cumpleaneros: cumpleanerosData || [] }
+        })
+      )
+
+      setEventos(eventosConCumpleaneros)
       setLoading(false)
     }
 
