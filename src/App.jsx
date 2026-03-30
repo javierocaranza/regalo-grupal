@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabase.js'
+import PageTopBar from './pages/PageTopBar.jsx'
 import './App.css'
 
 function App() {
@@ -13,9 +14,14 @@ function App() {
   const [loadingUpcoming, setLoadingUpcoming] = useState(true)
   const [cursos, setCursos] = useState([])
   const [loadingCursos, setLoadingCursos] = useState(true)
+  const [alumnosCurso, setAlumnosCurso] = useState([])
+  const [loadingAlumnos, setLoadingAlumnos] = useState(false)
   const [selectedCursoId, setSelectedCursoId] = useState(() => {
     if (cursoIdDesdeUrl) return cursoIdDesdeUrl
     return window.localStorage.getItem('curso_id_activo') || ''
+  })
+  const [alumnoApoderadoId, setAlumnoApoderadoId] = useState(() => {
+    return window.localStorage.getItem('alumno_apoderado_id_activo') || ''
   })
   const [rolIngreso, setRolIngreso] = useState(() => {
     if (rolDesdeUrl) return rolDesdeUrl
@@ -28,6 +34,10 @@ function App() {
   }
 
   const handleViewEvents = () => {
+    if (rolIngreso === 'apoderado' && !alumnoApoderadoId) {
+      setErrorIngreso('Selecciona primero tu alumno para continuar.')
+      return
+    }
     navigate('/mis-eventos')
   }
 
@@ -56,9 +66,19 @@ function App() {
     setRolIngreso(rol)
   }
 
-  const handleCambiarIngreso = () => {
-    window.localStorage.removeItem('rol_ingreso_activo')
-    setRolIngreso('')
+  const handleSelectAlumnoApoderado = (alumnoId) => {
+    setAlumnoApoderadoId(alumnoId)
+    setErrorIngreso('')
+
+    if (!alumnoId) {
+      window.localStorage.removeItem('alumno_apoderado_id_activo')
+      window.localStorage.removeItem('alumno_apoderado_nombre_activo')
+      return
+    }
+
+    const alumno = alumnosCurso.find((item) => String(item.id) === String(alumnoId))
+    window.localStorage.setItem('alumno_apoderado_id_activo', String(alumnoId))
+    window.localStorage.setItem('alumno_apoderado_nombre_activo', alumno?.nombre || '')
   }
 
   const getCursoNombre = (curso) => curso.nombre || curso.nombre_curso || `Curso ${curso.id}`
@@ -97,6 +117,18 @@ function App() {
   }, [cursoIdDesdeUrl, rolDesdeUrl])
 
   useEffect(() => {
+    const handleHomeReset = () => {
+      setRolIngreso('')
+      setSelectedCursoId('')
+      setAlumnoApoderadoId('')
+      setErrorIngreso('')
+    }
+
+    window.addEventListener('regalo:home', handleHomeReset)
+    return () => window.removeEventListener('regalo:home', handleHomeReset)
+  }, [])
+
+  useEffect(() => {
     const cargarCursos = async () => {
       setLoadingCursos(true)
 
@@ -120,13 +152,18 @@ function App() {
     const cargarProximosEventos = async () => {
       setLoadingUpcoming(true)
 
+      const cursoIdNumero = selectedCursoId ? parseInt(selectedCursoId, 10) : null
+      if (!cursoIdNumero) {
+        setUpcomingEvents([])
+        setLoadingUpcoming(false)
+        return
+      }
+
       const { data: eventosData, error: eventosError } = await supabase
         .from('eventos')
-        .select('id, fecha_evento')
-        .eq('estado', 'abierto')
-        .gte('fecha_evento', new Date().toISOString().split('T')[0])
+        .select('id, fecha_evento, curso_id')
+        .gt('fecha_evento', new Date().toISOString().split('T')[0])
         .order('fecha_evento', { ascending: true })
-        .limit(3)
 
       if (eventosError) {
         console.error('Error cargando próximos eventos:', eventosError)
@@ -136,6 +173,21 @@ function App() {
       }
 
       const eventos = eventosData || []
+
+      const { data: alumnosCursoData, error: alumnosCursoError } = await supabase
+        .from('alumnos')
+        .select('id')
+        .eq('curso_id', cursoIdNumero)
+
+      if (alumnosCursoError) {
+        console.error('Error cargando alumnos del curso para filtrar eventos:', alumnosCursoError)
+        setUpcomingEvents([])
+        setLoadingUpcoming(false)
+        return
+      }
+
+      const alumnoIdsCurso = new Set((alumnosCursoData || []).map((row) => Number(row.id)))
+
       const mapped = await Promise.all(
         eventos.map(async (evento) => {
           const { data: cumpleanerosData, error: cumpleanerosError } = await supabase
@@ -151,6 +203,14 @@ function App() {
             .map((row) => row.alumnos?.nombre)
             .filter(Boolean)
 
+          const cumpleanerosIdsEvento = new Set((cumpleanerosData || []).map((row) => Number(row.alumno_id)))
+          const pertenecePorCursoId = Number(evento.curso_id) === cursoIdNumero
+          const pertenecePorCumpleaneros = [...cumpleanerosIdsEvento].some((alumnoId) => alumnoIdsCurso.has(alumnoId))
+
+          if (!pertenecePorCursoId && !pertenecePorCumpleaneros) {
+            return null
+          }
+
           return {
             id: evento.id,
             name: nombres.length > 0 ? nombres.join(', ') : 'Sin cumpleañeros',
@@ -165,18 +225,69 @@ function App() {
         })
       )
 
-      setUpcomingEvents(mapped)
+      setUpcomingEvents(mapped.filter(Boolean))
       setLoadingUpcoming(false)
     }
 
     cargarProximosEventos()
-  }, [])
+  }, [selectedCursoId])
+
+  useEffect(() => {
+    const cargarAlumnosCurso = async () => {
+      if (rolIngreso !== 'apoderado' || !selectedCursoId) {
+        setAlumnosCurso([])
+        return
+      }
+
+      setLoadingAlumnos(true)
+
+      let data = []
+      const { data: alumnosData, error: alumnosError } = await supabase
+        .from('alumnos')
+        .select('id, nombre, curso_id')
+        .eq('curso_id', selectedCursoId)
+        .order('nombre', { ascending: true })
+
+      if (alumnosError) {
+        console.warn('No se pudo filtrar alumnos por curso_id, usando fallback:', alumnosError)
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('alumnos')
+          .select('id, nombre, curso_id')
+          .order('nombre', { ascending: true })
+
+        if (fallbackError) {
+          console.error('Error cargando alumnos del curso:', fallbackError)
+          setAlumnosCurso([])
+          setLoadingAlumnos(false)
+          return
+        }
+
+        data = (fallbackData || []).filter((row) => Number(row.curso_id) === Number(selectedCursoId))
+      } else {
+        data = alumnosData || []
+      }
+
+      setAlumnosCurso(data)
+
+      if (alumnoApoderadoId && !data.some((alumno) => String(alumno.id) === String(alumnoApoderadoId))) {
+        setAlumnoApoderadoId('')
+        window.localStorage.removeItem('alumno_apoderado_id_activo')
+        window.localStorage.removeItem('alumno_apoderado_nombre_activo')
+      }
+
+      setLoadingAlumnos(false)
+    }
+
+    cargarAlumnosCurso()
+  }, [rolIngreso, selectedCursoId])
 
   const esCoordinador = rolIngreso === 'coordinador'
   const esApoderado = rolIngreso === 'apoderado'
+  const alumnoApoderadoSeleccionado = alumnosCurso.find((alumno) => String(alumno.id) === String(alumnoApoderadoId))
 
   return (
     <div className="container">
+      <PageTopBar />
       <div className="hero">
         <h1 className="app-title">Regalo Grupal 🎁</h1>
         <p className="app-subtitle">La forma más fácil de organizar regalos de cumpleaños</p>
@@ -245,10 +356,36 @@ function App() {
                   </>
                 )}
               </p>
-              <button className="btn btn-secondary btn-cambiar" onClick={handleCambiarIngreso}>
-                Cambiar ingreso
-              </button>
             </div>
+
+            {esApoderado && (
+              <div className="upcoming-events" style={{ marginTop: '1rem' }}>
+                <h3 className="upcoming-title">Tu alumno</h3>
+                {loadingAlumnos ? (
+                  <p style={{ margin: 0 }}>Cargando alumnos del curso...</p>
+                ) : (
+                  <>
+                    <select
+                      className="ingreso-select"
+                      value={alumnoApoderadoId}
+                      onChange={(e) => handleSelectAlumnoApoderado(e.target.value)}
+                    >
+                      <option value="">Selecciona tu alumno</option>
+                      {alumnosCurso.map((alumno) => (
+                        <option key={alumno.id} value={String(alumno.id)}>
+                          {alumno.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {alumnoApoderadoSeleccionado && (
+                      <p className="app-subtitle" style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '1rem' }}>
+                        Alumno activo: <strong>{alumnoApoderadoSeleccionado.nombre}</strong>
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="buttons-container">
               {esCoordinador && (
@@ -256,12 +393,21 @@ function App() {
                   Crear evento
                 </button>
               )}
-              <button className="btn btn-secondary" onClick={handleViewEvents}>
+              <button
+                className="btn btn-secondary"
+                onClick={handleViewEvents}
+                disabled={esApoderado && !alumnoApoderadoId}
+              >
                 Ver mis eventos
               </button>
               {esCoordinador && (
                 <button className="btn btn-secondary" onClick={handleManageCourse}>
                   Administrar mi curso
+                </button>
+              )}
+              {esCoordinador && (
+                <button className="btn btn-secondary" onClick={() => navigate('/acusete')}>
+                  Acusete
                 </button>
               )}
               {esApoderado && (

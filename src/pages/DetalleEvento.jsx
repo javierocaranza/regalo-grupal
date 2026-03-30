@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function DetalleEvento() {
@@ -10,6 +11,9 @@ function DetalleEvento() {
   const esAdmin = new URLSearchParams(location.search).get('admin') === 'true'
   const OTRO_INVITADO_VALUE = 'otro_externo'
   const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
+  const esApoderado = rolIngreso === 'apoderado'
+  const alumnoApoderadoId = window.localStorage.getItem('alumno_apoderado_id_activo') || ''
+  const alumnoApoderadoNombre = window.localStorage.getItem('alumno_apoderado_nombre_activo') || ''
   const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const [evento, setEvento] = useState(null)
   const [participantes, setParticipantes] = useState([])
@@ -32,6 +36,12 @@ function DetalleEvento() {
   const [cuotaCalculada, setCuotaCalculada] = useState(null)
   const [confirmandoCuota, setConfirmandoCuota] = useState(false)
   const [completandoEvento, setCompletandoEvento] = useState(false)
+  const [boletaFile, setBoletaFile] = useState(null)
+  const [regaloFile, setRegaloFile] = useState(null)
+  const [boletaUrl, setBoletaUrl] = useState('')
+  const [regaloUrl, setRegaloUrl] = useState('')
+  const [subiendoBoleta, setSubiendoBoleta] = useState(false)
+  const [subiendoRegalo, setSubiendoRegalo] = useState(false)
   const [desinscribiendoId, setDesinscribiendoId] = useState(null)
   const [errorAdmin, setErrorAdmin] = useState('')
   const [mensajeAdmin, setMensajeAdmin] = useState('')
@@ -39,6 +49,13 @@ function DetalleEvento() {
 
   const storageBucket = 'comprobantes'
   const localStorageKey = `participacion_evento_${id}`
+  const boletaStorageKey = `evento_${id}_boleta_url`
+  const regaloStorageKey = `evento_${id}_regalo_url`
+
+  useEffect(() => {
+    setBoletaUrl(window.localStorage.getItem(boletaStorageKey) || '')
+    setRegaloUrl(window.localStorage.getItem(regaloStorageKey) || '')
+  }, [boletaStorageKey, regaloStorageKey])
 
   const formatFecha = (fechaIso) => {
     if (!fechaIso) return 'Sin fecha'
@@ -79,6 +96,13 @@ function DetalleEvento() {
     if (normalized === 'comprobante_subido') return 'Comprobante subido'
     return normalized ? raw : 'Pendiente'
   }
+
+  useEffect(() => {
+    if (esApoderado && alumnoApoderadoId) {
+      setSelectedParticipante(String(alumnoApoderadoId))
+      setNombreParticipante('')
+    }
+  }, [esApoderado, alumnoApoderadoId, id])
 
   useEffect(() => {
     const cargarDetalle = async () => {
@@ -164,16 +188,34 @@ function DetalleEvento() {
 
         setParticipantes(participantesConAlumno)
 
-        const participacionGuardada = window.localStorage.getItem(localStorageKey)
-        if (participacionGuardada) {
-          const participanteId = parseInt(participacionGuardada, 10)
-          if (participanteId) {
-            const participacionActual = participantesConAlumno.find((p) => p.id === participanteId)
-            if (participacionActual) {
-              setMiParticipacion(participacionActual)
-              setNombreParticipante(participacionActual.nombre_participante || '')
+        // Para apoderado: detectar participacion por alumno_id; para otros usuarios: usar localStorage
+        const rolActivo = window.localStorage.getItem('rol_ingreso_activo')
+        const alumnoIdActivo = window.localStorage.getItem('alumno_apoderado_id_activo')
+        if (rolActivo === 'apoderado' && alumnoIdActivo) {
+          const participacionPorAlumno = participantesConAlumno.find(
+            (p) => String(p.alumno_id) === String(alumnoIdActivo)
+          )
+          if (participacionPorAlumno) {
+            setMiParticipacion(participacionPorAlumno)
+            setNombreParticipante(participacionPorAlumno.nombre_participante || '')
+            window.localStorage.setItem(localStorageKey, String(participacionPorAlumno.id))
+          } else {
+            setMiParticipacion(null)
+          }
+        } else if (!esAdmin) {
+          const participacionGuardada = window.localStorage.getItem(localStorageKey)
+          if (participacionGuardada) {
+            const participanteId = parseInt(participacionGuardada, 10)
+            if (participanteId) {
+              const participacionActual = participantesConAlumno.find((p) => p.id === participanteId)
+              if (participacionActual) {
+                setMiParticipacion(participacionActual)
+                setNombreParticipante(participacionActual.nombre_participante || '')
+              }
             }
           }
+        } else {
+          setMiParticipacion(null)
         }
       }
 
@@ -188,6 +230,8 @@ function DetalleEvento() {
   const cuotaMin = evento?.cuota_minima ?? evento?.cuotaMinima ?? evento?.cuota_min ?? '-'
   const cuotaMax = evento?.cuota_maxima ?? evento?.cuotaMaxima ?? evento?.cuota_max ?? '-'
   const estadoEvento = evento?.estado ?? 'Activo'
+  const estadoEventoNormalizado = String(estadoEvento).toLowerCase()
+  const puedeInscribirParticipantes = esAdmin || ['abierto', 'activo'].includes(estadoEventoNormalizado)
   const esInvitadoExterno = selectedParticipante === OTRO_INVITADO_VALUE
   const alumnoSeleccionadoId =
     !esInvitadoExterno && selectedParticipante ? parseInt(selectedParticipante, 10) : null
@@ -205,8 +249,13 @@ function DetalleEvento() {
       return
     }
 
+    if (!puedeInscribirParticipantes) {
+      setErrorFlujo('La lista de participantes esta cerrada. Solo el administrador puede agregar en este estado.')
+      return
+    }
+
     if (!selectedParticipante) {
-      setErrorFlujo('Debes seleccionar un alumno o la opcion de invitado externo.')
+      setErrorFlujo(esAdmin ? 'Debes seleccionar un alumno.' : 'Debes seleccionar un alumno o la opcion de invitado externo.')
       return
     }
 
@@ -510,7 +559,11 @@ function DetalleEvento() {
 
   const resetearParticipacionLocal = () => {
     setMiParticipacion(null)
-    setSelectedParticipante('')
+    if (esApoderado && alumnoApoderadoId) {
+      setSelectedParticipante(String(alumnoApoderadoId))
+    } else {
+      setSelectedParticipante('')
+    }
     setNombreParticipante('')
     setComprobanteFile(null)
     setErrorFlujo('')
@@ -626,14 +679,87 @@ function DetalleEvento() {
     setMensajeFlujo('Comprobante actualizado correctamente para el alumno seleccionado.')
   }
 
+  const subirFotoBoleta = async () => {
+    setErrorAdmin('')
+    setMensajeAdmin('')
+
+    if (!boletaFile) {
+      setErrorAdmin('Selecciona una imagen de la boleta para subir.')
+      return
+    }
+
+    if (!boletaFile.type.startsWith('image/')) {
+      setErrorAdmin('La boleta debe ser un archivo de imagen.')
+      return
+    }
+
+    const extension = boletaFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const nombreArchivo = `${id}/boleta_${Date.now()}.${extension}`
+
+    setSubiendoBoleta(true)
+
+    const { error: uploadError } = await supabase.storage
+      .from(storageBucket)
+      .upload(nombreArchivo, boletaFile, { upsert: true })
+
+    setSubiendoBoleta(false)
+
+    if (uploadError) {
+      console.error('Error subiendo boleta:', uploadError)
+      setErrorAdmin('No se pudo subir la boleta. Intenta nuevamente.')
+      return
+    }
+
+    const { data: publicUrlData } = supabase.storage.from(storageBucket).getPublicUrl(nombreArchivo)
+    const url = publicUrlData?.publicUrl || ''
+    setBoletaUrl(url)
+    window.localStorage.setItem(boletaStorageKey, url)
+    setBoletaFile(null)
+    setMensajeAdmin('Foto de boleta subida correctamente.')
+  }
+
+  const subirFotoRegalo = async () => {
+    setErrorAdmin('')
+    setMensajeAdmin('')
+
+    if (!regaloFile) {
+      setErrorAdmin('Selecciona una imagen del regalo para subir.')
+      return
+    }
+
+    if (!regaloFile.type.startsWith('image/')) {
+      setErrorAdmin('La foto del regalo debe ser un archivo de imagen.')
+      return
+    }
+
+    const extension = regaloFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const nombreArchivo = `${id}/regalo_${Date.now()}.${extension}`
+
+    setSubiendoRegalo(true)
+
+    const { error: uploadError } = await supabase.storage
+      .from(storageBucket)
+      .upload(nombreArchivo, regaloFile, { upsert: true })
+
+    setSubiendoRegalo(false)
+
+    if (uploadError) {
+      console.error('Error subiendo foto de regalo:', uploadError)
+      setErrorAdmin('No se pudo subir la foto del regalo. Intenta nuevamente.')
+      return
+    }
+
+    const { data: publicUrlData } = supabase.storage.from(storageBucket).getPublicUrl(nombreArchivo)
+    const url = publicUrlData?.publicUrl || ''
+    setRegaloUrl(url)
+    window.localStorage.setItem(regaloStorageKey, url)
+    setRegaloFile(null)
+    setMensajeAdmin('Foto del regalo subida correctamente.')
+  }
+
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => {
-        const adminParam = esAdmin ? '?admin=true' : ''
-        navigate(`/mis-eventos${adminParam}`)
-      }}>
-        ← Volver
-      </button>
+      <PageTopBar />
 
       <h1 className="page-title">Detalle del Evento</h1>
 
@@ -665,6 +791,9 @@ function DetalleEvento() {
               </div>
               <div className="event-details">Cuota minima: {cuotaMin}</div>
               <div className="event-details">Cuota maxima: {cuotaMax}</div>
+              {participantes.length > 0 && participantes[0]?.cuota > 0 && (
+                <div className="event-details">Cuota por participante: <strong>${participantes[0].cuota.toLocaleString('es-CL')}</strong></div>
+              )}
               <div className="event-details">Estado: {estadoEvento}</div>
             </div>
           </div>
@@ -674,28 +803,39 @@ function DetalleEvento() {
             <div className="event-item">
               {!miParticipacion && (
                 <div className="participacion-form">
-                  <label htmlFor="alumnoParticipante" className="participacion-label">
-                    Selecciona alumno participante
-                  </label>
-                  <select
-                    id="alumnoParticipante"
-                    className="participacion-input"
-                    value={selectedParticipante}
-                    onChange={(e) => {
-                      setSelectedParticipante(e.target.value)
-                      if (e.target.value !== OTRO_INVITADO_VALUE) {
-                        setNombreParticipante('')
-                      }
-                    }}
-                  >
-                    <option value="">Selecciona una opcion</option>
-                    {alumnosDisponibles.map((alumno) => (
-                      <option key={alumno.id} value={String(alumno.id)}>
-                        {alumno.nombre}
-                      </option>
-                    ))}
-                    <option value={OTRO_INVITADO_VALUE}>Otro (invitado externo)</option>
-                  </select>
+                  {esApoderado ? (
+                    <>
+                      <label className="participacion-label">Alumno seleccionado</label>
+                      <div className="participacion-input" style={{ background: '#f8f9fa', cursor: 'not-allowed' }}>
+                        {alumnoApoderadoNombre || 'Alumno seleccionado'}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label htmlFor="alumnoParticipante" className="participacion-label">
+                        {esAdmin ? 'Agregar alumno participante' : 'Selecciona alumno participante'}
+                      </label>
+                      <select
+                        id="alumnoParticipante"
+                        className="participacion-input"
+                        value={selectedParticipante}
+                        onChange={(e) => {
+                          setSelectedParticipante(e.target.value)
+                          if (e.target.value !== OTRO_INVITADO_VALUE) {
+                            setNombreParticipante('')
+                          }
+                        }}
+                      >
+                        <option value="">Selecciona una opcion</option>
+                        {alumnosDisponibles.map((alumno) => (
+                          <option key={alumno.id} value={String(alumno.id)}>
+                            {alumno.nombre}
+                          </option>
+                        ))}
+                        {!esAdmin && <option value={OTRO_INVITADO_VALUE}>Otro (invitado externo)</option>}
+                      </select>
+                    </>
+                  )}
 
                   {esInvitadoExterno && (
                     <>
@@ -767,14 +907,30 @@ function DetalleEvento() {
                     type="button"
                     className="btn btn-primary"
                     onClick={confirmarParticipacion}
-                    disabled={confirmandoParticipacion || Boolean(participanteSeleccionado)}
+                    disabled={confirmandoParticipacion || Boolean(participanteSeleccionado) || !puedeInscribirParticipantes}
                   >
                     {confirmandoParticipacion ? 'Confirmando...' : 'Confirmar mi participacion'}
                   </button>
+
+                  {!puedeInscribirParticipantes && (
+                    <p
+                      className="mensaje-error"
+                      style={{
+                        marginTop: '0.75rem',
+                        background: '#ffffff',
+                        border: '1px solid #dc3545',
+                        borderRadius: '999px',
+                        padding: '0.65rem 1rem',
+                        textAlign: 'center'
+                      }}
+                    >
+                      Este evento ya no está abierto. Solo el administrador puede agregar participantes.
+                    </p>
+                  )}
                 </div>
               )}
 
-              {miParticipacion && (
+              {!esAdmin && miParticipacion && (
                 <div className="participacion-ok">
                   <div className="event-name">Participacion confirmada</div>
                   <div className="event-details">
@@ -934,8 +1090,58 @@ function DetalleEvento() {
                 )}
 
                 {estadoEvento === 'completado' && (
-                  <div className="completado-celebracion">
-                    🎉 ¡Evento completado! Todos los pagos fueron confirmados.
+                  <div className="cuota-box">
+                    <div className="completado-celebracion">
+                      🎉 ¡Evento completado! Todos los pagos fueron confirmados.
+                    </div>
+
+                    <div style={{ marginTop: '1rem' }}>
+                      <label htmlFor="boletaFile" className="participacion-label">Foto de boleta</label>
+                      <input
+                        id="boletaFile"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setBoletaFile(e.target.files?.[0] || null)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        disabled={subiendoBoleta}
+                        onClick={subirFotoBoleta}
+                        style={{ marginTop: '0.5rem' }}
+                      >
+                        {subiendoBoleta ? 'Subiendo...' : 'Subir boleta'}
+                      </button>
+                      {boletaUrl && (
+                        <a href={boletaUrl} target="_blank" rel="noreferrer" className="comprobante-link">
+                          Ver foto de boleta
+                        </a>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: '1rem' }}>
+                      <label htmlFor="regaloFile" className="participacion-label">Foto del regalo</label>
+                      <input
+                        id="regaloFile"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setRegaloFile(e.target.files?.[0] || null)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        disabled={subiendoRegalo}
+                        onClick={subirFotoRegalo}
+                        style={{ marginTop: '0.5rem' }}
+                      >
+                        {subiendoRegalo ? 'Subiendo...' : 'Subir foto regalo'}
+                      </button>
+                      {regaloUrl && (
+                        <a href={regaloUrl} target="_blank" rel="noreferrer" className="comprobante-link">
+                          Ver foto del regalo
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function CrearEvento() {
@@ -24,16 +25,38 @@ function CrearEvento() {
 
   useEffect(() => {
     const cargarAlumnos = async () => {
-      const { data, error } = await supabase.from('alumnos').select('id, nombre, fecha_cumpleanos')
-      if (error) {
-        console.error('Error cargando alumnos:', error)
+      const cursoIdNumero = cursoIdActivo ? parseInt(cursoIdActivo, 10) : null
+      if (!cursoIdNumero) {
+        setAlumnos([])
         return
       }
+
+      const { data, error } = await supabase
+        .from('alumnos')
+        .select('id, nombre, fecha_cumpleanos, curso_id')
+        .eq('curso_id', cursoIdNumero)
+
+      if (error) {
+        console.warn('No se pudo filtrar alumnos por curso_id, usando fallback:', error)
+
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('alumnos')
+          .select('id, nombre, fecha_cumpleanos, curso_id')
+
+        if (fallbackError) {
+          console.error('Error cargando alumnos:', fallbackError)
+          setAlumnos([])
+          return
+        }
+
+        setAlumnos((fallbackData || []).filter((alumno) => Number(alumno.curso_id) === cursoIdNumero))
+        return
+      }
+
       setAlumnos(data || [])
-      console.log('Alumnos cargados:', data?.map(a => ({ id: a.id, type: typeof a.id })))
     }
     cargarAlumnos()
-  }, [])
+  }, [cursoIdActivo])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -67,6 +90,7 @@ function CrearEvento() {
       cuota_minima: parseFloat(formData.cuotaMinima),
       cuota_maxima: parseFloat(formData.cuotaMaxima),
       descripcion_regalo: formData.descripcion,
+      curso_id: cursoIdActivo ? parseInt(cursoIdActivo, 10) : null,
       nombre_coordinador: formData.coordinadorNombre,
       rut_coordinador: formData.coordinadorRut,
       banco: formData.coordinadorBanco,
@@ -94,6 +118,7 @@ function CrearEvento() {
       alumno_id: alumnoId,
     }))
 
+    console.log('cumpleaneros a insertar:', cumpleanerosData)
     const { error: cumpleanerosError } = await supabase
       .from('cumpleaneros')
       .insert(cumpleanerosData)
@@ -120,15 +145,7 @@ function CrearEvento() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => {
-        const params = new URLSearchParams()
-        if (rolIngreso) params.append('rol', rolIngreso)
-        if (cursoIdActivo) params.append('cursoId', cursoIdActivo)
-        const query = params.toString()
-        navigate(`/${query ? '?' + query : ''}`)
-      }}>
-        ← Volver
-      </button>
+      <PageTopBar />
       <h1 className="page-title">Crear Evento</h1>
       
       <form className="event-form" onSubmit={handleSubmit}>

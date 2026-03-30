@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { supabase } from '../supabase.js'
+import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function MiCurso() {
@@ -63,14 +64,35 @@ function MiCurso() {
   }
 
   const convertDateSpanishToISO = (dateStr) => {
-    if (!dateStr) return ''
-    const parts = dateStr.toLowerCase().trim().split(' ')
-    if (parts.length !== 2) return dateStr
-    const day = parts[0].padStart(2, '0')
+    const fechaOriginal = dateStr
+    const logAndReturn = (resultado) => {
+      console.log('fecha original:', fechaOriginal, '-> convertida:', resultado)
+      return resultado
+    }
+
+    if (!dateStr) return logAndReturn(null)
+
+    const raw = String(dateStr).trim()
+    if (!raw) return logAndReturn(null)
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return logAndReturn(raw)
+
+    const normalized = raw
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+
+    const parts = normalized.split(/\s+/)
+    if (parts.length !== 2) return logAndReturn(null)
+
+    const dayNum = parseInt(parts[0], 10)
+    if (!dayNum || dayNum < 1 || dayNum > 31) return logAndReturn(null)
+
     const month = months[parts[1]]
-    if (!month) return dateStr
-    const year = 2024 // Asumir año 2024
-    return `${year}-${month}-${day}`
+    if (!month) return logAndReturn(null)
+
+    const year = 2026
+    return logAndReturn(`${year}-${month}-${String(dayNum).padStart(2, '0')}`)
   }
 
   const cargarAlumnos = async (cursoId) => {
@@ -100,7 +122,7 @@ function MiCurso() {
   const importarAlumnos = async (alumnosArray, cursoId) => {
     const processedAlumnos = alumnosArray.map(alumno => ({
       nombre: alumno.nombre,
-      fecha_cumpleanos: convertDateSpanishToISO(alumno.fechaCumple),
+      fecha_cumpleanos: alumno.fechaCumple ?? null,
       nombre_padre: alumno.nombrePadre,
       telefono_padre: alumno.telefonoPadre,
       email_padre: alumno.emailPadre,
@@ -376,10 +398,21 @@ function MiCurso() {
   }
 
   const processData = async (data) => {
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('keys del CSV:', Object.keys(data[0]))
+    }
+
+    const normalizeKey = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+
     const rowsToInsert = data
       .map(row => {
         const nombre = row['nombre'] || row['Nombre'] || row['Nombre alumno'] || row['nombre alumno']
-        const fechaCumple = row['fecha_cumpleanos'] || row['fecha cumpleanos'] || row['fechaCumple'] || row['Cumpleaños']
+        const keyCumple = Object.keys(row).find((key) => normalizeKey(key).includes('cumplea'))
+        const fechaCumple = keyCumple ? row[keyCumple] : null
         const nombrePadre = row['nombre_padre'] || row['nombre padre'] || row['Nombre padre']
         const telefonoPadre = row['telefono_padre'] || row['telefono padre'] || row['Telefono padre']
         const emailPadre = row['email_padre'] || row['email padre'] || row['Email padre']
@@ -434,8 +467,8 @@ function MiCurso() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={handleVolver}>← Volver</button>
-      <h1 className="page-title">{cursoGuardado ? `${curso.nombre} - ${curso.anio}` : 'Mi Curso'}</h1>
+      <PageTopBar />
+      <h1 className="page-title">{cursoGuardado ? `${curso.nombre} - ${curso.anio}` : (esNuevoCurso ? 'Crear Curso' : 'Mi Curso')}</h1>
       <p>Administra los alumnos de tu curso</p>
 
       <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
@@ -490,7 +523,7 @@ function MiCurso() {
         </div>
       )}
 
-      {alumnos.length > 0 && (
+      {!esNuevoCurso && alumnos.length > 0 && (
         <div className="upcoming-events" style={{ marginTop: '2rem' }}>
           <h3 className="upcoming-title">Lista de Alumnos</h3>
           <div className="events-list">

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function MisEventos() {
   const navigate = useNavigate()
   const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
   const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
+  const [cursoNombreActivo, setCursoNombreActivo] = useState('Mi curso')
   const [eventos, setEventos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -43,10 +45,12 @@ function MisEventos() {
     return evento.cuota_maxima ?? evento.cuotaMaxima ?? evento.cuota_max ?? null
   }
 
+  const normalizeCuotaDefinida = (evento) => {
+    return evento.cuota_definida ?? evento.cuotaDefinida ?? null
+  }
+
   const normalizeEstado = (evento) => {
-    const raw = (evento.estado ?? '').toString().toLowerCase()
-    if (raw === 'cerrado' || raw === 'closed') return 'Cerrado'
-    return 'Activo'
+    return evento.estado ?? evento.estadoEvento ?? 'Activo'
   }
 
   const formatFecha = (fechaIso) => {
@@ -61,41 +65,125 @@ function MisEventos() {
   }
 
   useEffect(() => {
+    const cargarCursoActivo = async () => {
+      const cursoIdNumero = cursoIdActivo ? parseInt(cursoIdActivo, 10) : null
+      if (!cursoIdNumero) {
+        setCursoNombreActivo('Mi curso')
+        return
+      }
+
+      const { data, error: cursoError } = await supabase
+        .from('cursos')
+        .select('nombre, anio')
+        .eq('id', cursoIdNumero)
+        .single()
+
+      if (cursoError || !data) {
+        setCursoNombreActivo(`Curso ${cursoIdNumero}`)
+        return
+      }
+
+      const nombre = data.nombre || `Curso ${cursoIdNumero}`
+      const anio = data.anio ? ` - ${data.anio}` : ''
+      setCursoNombreActivo(`${nombre}${anio}`)
+    }
+
+    cargarCursoActivo()
+  }, [cursoIdActivo])
+
+  useEffect(() => {
     const cargarEventos = async () => {
       setLoading(true)
       setError('')
 
-      const { data, error: supabaseError } = await supabase
+      const cursoIdNumero = cursoIdActivo ? parseInt(cursoIdActivo, 10) : null
+      if (!cursoIdNumero) {
+        setEventos([])
+        setLoading(false)
+        return
+      }
+
+      let alumnosCurso = []
+      const { data: alumnosData, error: alumnosError } = await supabase
+        .from('alumnos')
+        .select('id, curso_id')
+        .eq('curso_id', cursoIdNumero)
+
+      if (alumnosError) {
+        console.warn('No se pudo filtrar alumnos por curso_id, usando fallback:', alumnosError)
+        const { data: alumnosFallbackData, error: alumnosFallbackError } = await supabase
+          .from('alumnos')
+          .select('id, curso_id')
+
+        if (alumnosFallbackError) {
+          console.error('Error cargando alumnos para filtrar eventos:', alumnosFallbackError)
+          setError('No se pudieron cargar los eventos del curso.')
+          setEventos([])
+          setLoading(false)
+          return
+        }
+
+        alumnosCurso = (alumnosFallbackData || []).filter((row) => Number(row.curso_id) === cursoIdNumero)
+      } else {
+        alumnosCurso = alumnosData || []
+      }
+
+      const alumnoIdsCurso = new Set(alumnosCurso.map((row) => Number(row.id)))
+
+      const { data: eventosData, error: eventosError } = await supabase
         .from('eventos')
         .select('')
         .order('fecha_evento', { ascending: true })
 
-      if (supabaseError) {
-        console.error('Error cargando eventos:', supabaseError)
+      if (eventosError) {
+        console.error('Error cargando eventos:', eventosError)
         setError('No se pudieron cargar los eventos.')
         setEventos([])
         setLoading(false)
         return
       }
 
-      const eventosBase = data || []
-
       const eventosConCumpleaneros = await Promise.all(
-        eventosBase.map(async (evento) => {
-          const { data: cumpleanerosData } = await supabase
+        (eventosData || []).map(async (evento) => {
+          const { data: cumpleanerosData, error: cumpleanerosError } = await supabase
             .from('cumpleaneros')
             .select('alumno_id, alumnos(nombre)')
             .eq('evento_id', evento.id)
-          return { ...evento, cumpleaneros: cumpleanerosData || [] }
+
+          const { data: participantesData, error: participantesError } = await supabase
+            .from('participantes')
+            .select('cuota')
+            .eq('evento_id', evento.id)
+            .gt('cuota', 0)
+            .limit(1)
+
+          if (cumpleanerosError) {
+            console.error('Error cargando cumpleañeros del evento:', cumpleanerosError)
+          }
+
+          if (participantesError) {
+            console.error('Error cargando cuota definida del evento:', participantesError)
+          }
+
+          const cumpleaneros = cumpleanerosData || []
+          const cuotaDefinida = Number(participantesData?.[0]?.cuota) || null
+          const pertenecePorCursoId = Number(evento.curso_id) === cursoIdNumero
+          const pertenecePorCumpleaneros = cumpleaneros.some((row) => alumnoIdsCurso.has(Number(row.alumno_id)))
+
+          if (!pertenecePorCursoId && !pertenecePorCumpleaneros) {
+            return null
+          }
+
+          return { ...evento, cumpleaneros, cuotaDefinida }
         })
       )
 
-      setEventos(eventosConCumpleaneros)
+      setEventos(eventosConCumpleaneros.filter(Boolean))
       setLoading(false)
     }
 
     cargarEventos()
-  }, [])
+  }, [cursoIdActivo])
 
   const eventosOrdenados = useMemo(() => {
     return [...eventos].sort((a, b) => {
@@ -112,18 +200,26 @@ function MisEventos() {
 
   return (
     <div className="page-container">
-      <button className="back-btn" onClick={() => {
-        const params = new URLSearchParams()
-        if (rolIngreso) params.append('rol', rolIngreso)
-        if (cursoIdActivo) params.append('cursoId', cursoIdActivo)
-        const query = params.toString()
-        navigate(`/${query ? '?' + query : ''}`)
-      }}>
-        ← Volver
-      </button>
+      <PageTopBar />
 
       <h1 className="page-title">Mis Eventos</h1>
       <p>Revisa todos los eventos guardados de tu curso.</p>
+      <div style={{ marginTop: '0.75rem' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            navigate('/historial-eventos', {
+              state: {
+                cursoId: cursoIdActivo,
+                cursoNombre: cursoNombreActivo
+              }
+            })
+          }}
+        >
+          Ver todos los eventos
+        </button>
+      </div>
 
       {loading && <p style={{ marginTop: '1.5rem' }}>Cargando eventos...</p>}
 
@@ -157,13 +253,14 @@ function MisEventos() {
               const fecha = normalizeFecha(evento)
               const cuotaMin = normalizeCuotaMin(evento)
               const cuotaMax = normalizeCuotaMax(evento)
+              const cuotaDefinida = normalizeCuotaDefinida(evento)
 
               return (
                 <div key={evento.id} className="event-item">
                   <div className="event-name">{normalizeCumpleaneros(evento)}</div>
                   <div className="event-details">Fecha: {formatFecha(fecha)}</div>
                   <div className="event-details">
-                    Cuota: {cuotaMin ?? '-'} - {cuotaMax ?? '-'}
+                    Cuota: {cuotaDefinida ? `$${cuotaDefinida.toLocaleString('es-CL')}` : `${cuotaMin ?? '-'} - ${cuotaMax ?? '-'}`}
                   </div>
                   <div className="event-details">Estado: {normalizeEstado(evento)}</div>
                   <div style={{ marginTop: '0.75rem' }}>
