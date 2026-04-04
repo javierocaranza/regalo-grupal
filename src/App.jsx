@@ -23,10 +23,7 @@ function App() {
   const [alumnoApoderadoId, setAlumnoApoderadoId] = useState(() => {
     return window.localStorage.getItem('alumno_apoderado_id_activo') || ''
   })
-  const [rolIngreso, setRolIngreso] = useState(() => {
-    if (rolDesdeUrl) return rolDesdeUrl
-    return window.localStorage.getItem('rol_ingreso_activo') || ''
-  })
+  const [rolIngreso, setRolIngreso] = useState('')
   const [errorIngreso, setErrorIngreso] = useState('')
 
   const handleCreateEvent = () => {
@@ -105,6 +102,8 @@ function App() {
   const cursoSeleccionado = cursos.find((curso) => String(curso.id) === selectedCursoId)
 
   useEffect(() => {
+    window.localStorage.removeItem('rol_ingreso_activo')
+
     if (cursoIdDesdeUrl) {
       setSelectedCursoId(cursoIdDesdeUrl)
       window.localStorage.setItem('curso_id_activo', cursoIdDesdeUrl)
