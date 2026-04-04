@@ -289,7 +289,7 @@ function App() {
     <div className="container">
       <PageTopBar />
       <div className="hero">
-        <h1 className="app-title">Regalo Grupal 🎁</h1>
+        <h1 className="app-title"><span className="title-regalo">Regalo</span> <span className="title-grupal">Grupal</span> 🎁</h1>
         <p className="app-subtitle">La forma más fácil de organizar regalos de cumpleaños</p>
 
         {!rolIngreso && (
