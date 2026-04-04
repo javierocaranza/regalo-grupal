@@ -346,46 +346,48 @@ function App() {
 
         {rolIngreso && (
           <>
-            <div className="ingreso-resumen">
-              <p>
-                Ingresaste como <strong>{esCoordinador ? 'Coordinador' : 'Apoderado'}</strong>
-                {cursoSeleccionado && (
-                  <>
-                    {' '}
-                    en <strong>{getCursoLabel(cursoSeleccionado)}</strong>
-                  </>
-                )}
-              </p>
-            </div>
-
-            {esApoderado && (
-              <div className="upcoming-events" style={{ marginTop: '1rem' }}>
-                <h3 className="upcoming-title">Tu alumno</h3>
-                {loadingAlumnos ? (
-                  <p style={{ margin: 0 }}>Cargando alumnos del curso...</p>
-                ) : (
-                  <>
-                    <select
-                      className="ingreso-select"
-                      value={alumnoApoderadoId}
-                      onChange={(e) => handleSelectAlumnoApoderado(e.target.value)}
-                    >
-                      <option value="">Selecciona tu alumno</option>
-                      {alumnosCurso.map((alumno) => (
-                        <option key={alumno.id} value={String(alumno.id)}>
-                          {alumno.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {alumnoApoderadoSeleccionado && (
-                      <p className="app-subtitle" style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '1rem' }}>
-                        Alumno activo: <strong>{alumnoApoderadoSeleccionado.nombre}</strong>
-                      </p>
-                    )}
-                  </>
-                )}
+            <div style={{ minHeight: '120px' }}>
+              <div className="ingreso-resumen">
+                <p>
+                  Ingresaste como <strong>{esCoordinador ? 'Coordinador' : 'Apoderado'}</strong>
+                  {cursoSeleccionado && (
+                    <>
+                      {' '}
+                      en <strong>{getCursoLabel(cursoSeleccionado)}</strong>
+                    </>
+                  )}
+                </p>
               </div>
-            )}
+
+              {esApoderado && (
+                <div className="upcoming-events" style={{ marginTop: '1rem' }}>
+                  <h3 className="upcoming-title">Tu alumno</h3>
+                  {loadingAlumnos ? (
+                    <p style={{ margin: 0 }}>Cargando alumnos del curso...</p>
+                  ) : (
+                    <>
+                      <select
+                        className="ingreso-select"
+                        value={alumnoApoderadoId}
+                        onChange={(e) => handleSelectAlumnoApoderado(e.target.value)}
+                      >
+                        <option value="">Selecciona tu alumno</option>
+                        {alumnosCurso.map((alumno) => (
+                          <option key={alumno.id} value={String(alumno.id)}>
+                            {alumno.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      {alumnoApoderadoSeleccionado && (
+                        <p className="app-subtitle" style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '1rem' }}>
+                          Alumno activo: <strong>{alumnoApoderadoSeleccionado.nombre}</strong>
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="buttons-container">
               {esCoordinador && (

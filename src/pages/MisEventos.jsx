@@ -64,6 +64,12 @@ function MisEventos() {
     })
   }
 
+  const formatMonedaClp = (monto) => {
+    const montoNumero = Number(monto)
+    if (!Number.isFinite(montoNumero)) return '-'
+    return `$${montoNumero.toLocaleString('es-CL')}`
+  }
+
   useEffect(() => {
     const cargarCursoActivo = async () => {
       const cursoIdNumero = cursoIdActivo ? parseInt(cursoIdActivo, 10) : null
@@ -157,12 +163,22 @@ function MisEventos() {
             .gt('cuota', 0)
             .limit(1)
 
+          const { count: participantesPagadosCount, error: participantesPagadosError } = await supabase
+            .from('participantes')
+            .select('id', { count: 'exact', head: true })
+            .eq('evento_id', evento.id)
+            .eq('estado', 'pagado')
+
           if (cumpleanerosError) {
             console.error('Error cargando cumpleañeros del evento:', cumpleanerosError)
           }
 
           if (participantesError) {
             console.error('Error cargando cuota definida del evento:', participantesError)
+          }
+
+          if (participantesPagadosError) {
+            console.error('Error cargando participantes pagados del evento:', participantesPagadosError)
           }
 
           const cumpleaneros = cumpleanerosData || []
@@ -174,7 +190,12 @@ function MisEventos() {
             return null
           }
 
-          return { ...evento, cumpleaneros, cuotaDefinida }
+          return {
+            ...evento,
+            cumpleaneros,
+            cuotaDefinida,
+            participantesPagados: participantesPagadosCount || 0
+          }
         })
       )
 
@@ -254,15 +275,25 @@ function MisEventos() {
               const cuotaMin = normalizeCuotaMin(evento)
               const cuotaMax = normalizeCuotaMax(evento)
               const cuotaDefinida = normalizeCuotaDefinida(evento)
+              const estado = normalizeEstado(evento)
+              const esCompletado = String(estado).toLowerCase() === 'completado'
 
               return (
                 <div key={evento.id} className="event-item">
                   <div className="event-name">{normalizeCumpleaneros(evento)}</div>
                   <div className="event-details">Fecha: {formatFecha(fecha)}</div>
-                  <div className="event-details">
-                    Cuota: {cuotaDefinida ? `$${cuotaDefinida.toLocaleString('es-CL')}` : `${cuotaMin ?? '-'} - ${cuotaMax ?? '-'}`}
-                  </div>
-                  <div className="event-details">Estado: {normalizeEstado(evento)}</div>
+                  {esCompletado ? (
+                    <>
+                      <div className="event-details">Monto total del regalo: {formatMonedaClp(evento.monto_total)}</div>
+                      <div className="event-details">Numero de participantes: {evento.participantesPagados ?? 0}</div>
+                      <div className="event-details">Cuota por persona: {formatMonedaClp(cuotaDefinida)}</div>
+                    </>
+                  ) : (
+                    <div className="event-details">
+                      Cuota: {cuotaDefinida ? `$${cuotaDefinida.toLocaleString('es-CL')}` : `${cuotaMin ?? '-'} - ${cuotaMax ?? '-'}`}
+                    </div>
+                  )}
+                  <div className="event-details">Estado: {estado}</div>
                   <div style={{ marginTop: '0.75rem' }}>
                     <button
                       className="btn btn-secondary"
