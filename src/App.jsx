@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabase.js'
 import PageTopBar from './pages/PageTopBar.jsx'
+import TerminosModal from './pages/TerminosModal.jsx'
 import './App.css'
 
 function App() {
@@ -51,6 +52,12 @@ function App() {
     navigate('/mi-curso?nuevo=true')
   }
 
+  const handleReabrirTerminos = (event) => {
+    event.preventDefault()
+    window.localStorage.removeItem('terminos_aceptados')
+    window.location.reload()
+  }
+
   const handleSelectRol = (rol) => {
     if (!selectedCursoId) {
       setErrorIngreso('Primero selecciona un curso para continuar.')
@@ -76,6 +83,30 @@ function App() {
     const alumno = alumnosCurso.find((item) => String(item.id) === String(alumnoId))
     window.localStorage.setItem('alumno_apoderado_id_activo', String(alumnoId))
     window.localStorage.setItem('alumno_apoderado_nombre_activo', alumno?.nombre || '')
+
+    const terminosAceptados = window.localStorage.getItem('terminos_aceptados') === 'true'
+    if (terminosAceptados && alumnoId) {
+      const alumnoIdNumero = Number(alumnoId)
+      const cursoIdNumero = parseInt(selectedCursoId, 10)
+
+      if (Number.isFinite(alumnoIdNumero) && Number.isFinite(cursoIdNumero)) {
+        ;(async () => {
+          try {
+            const { error } = await supabase.from('terminos_aceptados').insert({
+              alumno_id: alumnoIdNumero,
+              curso_id: cursoIdNumero,
+              version: '1.0'
+            })
+
+            if (error) {
+              console.warn('No se pudo registrar aceptación de términos:', error)
+            }
+          } catch (insertError) {
+            console.warn('No se pudo registrar aceptación de términos:', insertError)
+          }
+        })()
+      }
+    }
   }
 
   const getCursoNombre = (curso) => curso.nombre || curso.nombre_curso || `Curso ${curso.id}`
@@ -287,6 +318,7 @@ function App() {
   return (
     <div className="container">
       <PageTopBar />
+      <TerminosModal />
       <div className="hero">
         <h1 className="app-title"><span className="title-regalo">Regalo</span> <span className="title-grupal">Grupal</span> 🎁</h1>
         <p className="app-subtitle">La forma más fácil de organizar regalos de cumpleaños</p>
@@ -435,6 +467,16 @@ function App() {
             </div>
           </div>
         )}
+
+        <p style={{ marginTop: '1.5rem', marginBottom: 0, textAlign: 'center', fontSize: '0.8rem', color: '#9ca3af' }}>
+          <a
+            href="#"
+            onClick={handleReabrirTerminos}
+            style={{ color: '#9ca3af', textDecoration: 'underline' }}
+          >
+            Términos y condiciones
+          </a>
+        </p>
       </div>
     </div>
   )
