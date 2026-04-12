@@ -119,6 +119,53 @@ function MiCurso() {
     return data || []
   }
 
+  const NOMBRES_NINA = new Set([
+    'ana','maria','valentina','sofia','isadora','antonia','catalina','josefina','gabriela',
+    'fernanda','camila','isabella','emilia','renata','florencia','constanza','francisca',
+    'paula','javiera','martina','daniela','alicia','victoria','olivia','julieta','maite',
+    'trinidad','paz','gracia','sara','julia','clara','elena','lucia','amanda','magdalena',
+    'elisa','rocio','andrea','carolina','veronica','paola','natalia','claudia','monica',
+    'patricia','barbara','lorena','pilar','regina','rosa','carmen','teresa','beatriz',
+    'ximena','soledad','alejandra','yasna','ingrid','eliana','miriam','alondra','tamara',
+    'valeria','pamela','viviana','nicole','vanessa','karla','margarita','cecilia','gloria',
+    'susana','cristina','marcela','fabiola','iris','esperanza','luz','mercedes','gladys',
+    'silvia','nadia','raquel','rebeca','eva','alba','paloma','mariana','jimena','cynthia',
+    'denisse','priscilla','giselle','evelyn','jacqueline','yasmine','ariadna','camille',
+    'elsa','hannah','emma','mia','luna','abril','agustina','micaela','juanita','dolores',
+    'graciela','hortensia','irene','leonor','lidia','lourdes','marta','milagros','nieves',
+    'noelia','nora','olga','pia','rosario','salome','sandra','sonia','tania','tina',
+    'ursula','yolanda','zoe','araceli','celeste','consuelo','dafne','delia','diana',
+    'dulce','edith','estela','fatima','flor','gema','gianna','gina','hilda','ines','irma',
+    // nombres en ingles
+    'ava','charlotte','amelia','harper','abigail','emily','elizabeth','ella','madison',
+    'scarlett','aria','grace','chloe','penelope','riley','zoey','lily','eleanor','lillian',
+    'addison','aubrey','ellie','stella','natalie','leah','hazel','violet','aurora','savannah',
+    'audrey','brooklyn','bella','claire','skylar','lucy','paisley','everly','anna','caroline',
+    'nova','genesis','kennedy','samantha','maya','willow','kinsley','naomi','aaliyah','sarah',
+    'ariana','allison','gabriella','alice','madelyn','cora','ruby','serenity','autumn',
+    'adeline','hailey','quinn','nevaeh','ivy','sadie','piper','lydia','alexa','josephine',
+    'emery','delilah','arianna','vivian','kaylee','sophie','brielle','madeline','peyton',
+    'rylee','hadley','melody','aubree','jade','katherine','isabelle','nathalie','jasmine',
+    'bridget','molly','daisy','maggie','lila','annabelle','paige','alexis','mckenzie',
+    'mackenzie','adriana','amy','brooke','faith','mary','reagan','ashley','trinity','amber',
+    'tiffany','crystal','michelle','stephanie','jennifer','jessica','melissa','lauren',
+    'brittany','kayla','rebecca','rachel','danielle','kelsey','taylor','morgan','jordan',
+    'sydney','shelby','cassandra','natasha','lacey','courtney','whitney','lindsey','chelsea',
+    'megan','alyssa'
+  ])
+
+  const inferirGenero = (nombre) => {
+    if (!nombre) return null
+    const primerNombre = String(nombre)
+      .trim()
+      .split(/\s+/)[0]
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+    if (!primerNombre) return null
+    return NOMBRES_NINA.has(primerNombre) ? 'niña' : 'niño'
+  }
+
   const importarAlumnos = async (alumnosArray, cursoId) => {
     const processedAlumnos = alumnosArray.map(alumno => ({
       nombre: alumno.nombre,
@@ -129,7 +176,8 @@ function MiCurso() {
       nombre_madre: alumno.nombreMadre,
       telefono_madre: alumno.telefonoMadre,
       email_madre: alumno.emailMadre,
-      curso_id: cursoId || null
+      curso_id: cursoId || null,
+      genero: inferirGenero(alumno.nombre)
     }))
 
     const { data, error } = await supabase.from('alumnos').insert(processedAlumnos)

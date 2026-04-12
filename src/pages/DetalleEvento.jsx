@@ -761,7 +761,7 @@ function DetalleEvento() {
     <div className="page-container">
       <PageTopBar />
 
-      <h1 className="page-title">Detalle del Evento</h1>
+      <h1 className="page-title">Detalle del Cumpleaños</h1>
 
       {loading && <p style={{ marginTop: '1.5rem' }}>Cargando detalle...</p>}
 
@@ -783,7 +783,7 @@ function DetalleEvento() {
       {!loading && !error && evento && (
         <>
           <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
-            <h3 className="upcoming-title">Informacion del Evento</h3>
+            <h3 className="upcoming-title">Informacion del Cumpleaños</h3>
             <div className="event-item">
               <div className="event-details">Fecha: {formatFecha(fechaEvento)}</div>
               <div className="event-details">
@@ -924,7 +924,7 @@ function DetalleEvento() {
                         textAlign: 'center'
                       }}
                     >
-                      Este evento ya no está abierto. Solo el administrador puede agregar participantes.
+                      Este cumpleaños ya no está abierto. Solo el administrador puede agregar participantes.
                     </p>
                   )}
                 </div>
@@ -996,7 +996,7 @@ function DetalleEvento() {
 
           {esAdmin && (
             <div className="upcoming-events admin-panel" style={{ marginTop: '1.5rem' }}>
-              <h3 className="upcoming-title">Panel coordinador — Gestion del evento</h3>
+              <h3 className="upcoming-title">Panel coordinador — Gestion del cumpleaños</h3>
 
               <div className="admin-gestion-box">
                 {estadoEvento === 'abierto' && (
@@ -1092,7 +1092,7 @@ function DetalleEvento() {
                 {estadoEvento === 'completado' && (
                   <div className="cuota-box">
                     <div className="completado-celebracion">
-                      🎉 ¡Evento completado! Todos los pagos fueron confirmados.
+                      🎉 ¡Cumpleaños completado! Todos los pagos fueron confirmados.
                     </div>
 
                     <div style={{ marginTop: '1rem' }}>

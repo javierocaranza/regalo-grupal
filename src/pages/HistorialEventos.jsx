@@ -258,7 +258,7 @@ function HistorialEventos() {
         </button>
       </div>
 
-      <h1 className="page-title" style={{ marginTop: '1rem' }}>Historial de eventos</h1>
+      <h1 className="page-title" style={{ marginTop: '1rem' }}>Historial de cumpleaños</h1>
       <p>{cursoNombre || 'Mi curso'}</p>
 
       {loading && <p style={{ marginTop: '1.5rem' }}>Cargando historial...</p>}
@@ -280,14 +280,14 @@ function HistorialEventos() {
 
       {!loading && !error && eventos.length === 0 && (
         <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
-          <h3 className="upcoming-title">Eventos</h3>
-          <p style={{ margin: 0 }}>No hay eventos en el historial de este curso.</p>
+          <h3 className="upcoming-title">Cumpleaños</h3>
+          <p style={{ margin: 0 }}>No hay cumpleaños en el historial de este curso.</p>
         </div>
       )}
 
       {!loading && !error && eventos.length > 0 && (
         <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
-          <h3 className="upcoming-title">Eventos</h3>
+          <h3 className="upcoming-title">Cumpleaños</h3>
           <div className="events-list">
             {eventos.map((evento) => (
               <div key={evento.id} className="event-item">

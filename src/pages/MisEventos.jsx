@@ -199,12 +199,45 @@ function MisEventos() {
         })
       )
 
-      setEventos(eventosConCumpleaneros.filter(Boolean))
+      const eventosFiltrados = eventosConCumpleaneros.filter(Boolean)
+
+      if (rolIngreso !== 'apoderado') {
+        setEventos(eventosFiltrados)
+        setLoading(false)
+        return
+      }
+
+      const alumnoApoderadoIdRaw = window.localStorage.getItem('alumno_apoderado_id_activo') || ''
+      let generoAlumno = null
+
+      if (alumnoApoderadoIdRaw) {
+        const alumnoApoderadoIdNumero = parseInt(alumnoApoderadoIdRaw, 10)
+        if (alumnoApoderadoIdNumero) {
+          const { data: alumnoData } = await supabase
+            .from('alumnos')
+            .select('genero')
+            .eq('id', alumnoApoderadoIdNumero)
+            .single()
+          generoAlumno = alumnoData?.genero ?? null
+        }
+      }
+
+      const eventosPorGenero = generoAlumno === null
+        ? eventosFiltrados
+        : eventosFiltrados.filter((evento) => {
+            const invitados = evento.invitados ?? 'todos'
+            if (invitados === 'todos') return true
+            if (invitados === 'niñas') return generoAlumno === 'niña'
+            if (invitados === 'niños') return generoAlumno === 'niño'
+            return true
+          })
+
+      setEventos(eventosPorGenero)
       setLoading(false)
     }
 
     cargarEventos()
-  }, [cursoIdActivo])
+  }, [cursoIdActivo, rolIngreso])
 
   const eventosOrdenados = useMemo(() => {
     return [...eventos].sort((a, b) => {
@@ -223,8 +256,8 @@ function MisEventos() {
     <div className="page-container">
       <PageTopBar />
 
-      <h1 className="page-title">Mis Eventos</h1>
-      <p>Revisa todos los eventos guardados de tu curso.</p>
+      <h1 className="page-title">{rolIngreso === 'apoderado' ? 'Invitaciones' : 'Mis Cumpleaños'}</h1>
+      <p>Revisa todos los cumpleaños guardados de tu curso.</p>
       <div style={{ marginTop: '0.75rem' }}>
         <button
           type="button"
@@ -238,7 +271,7 @@ function MisEventos() {
             })
           }}
         >
-          Ver todos los eventos
+          Ver todos los cumpleaños
         </button>
       </div>
 
@@ -261,14 +294,14 @@ function MisEventos() {
 
       {!loading && !error && eventosOrdenados.length === 0 && (
         <div className="upcoming-events" style={{ marginTop: '2rem' }}>
-          <h3 className="upcoming-title">Eventos</h3>
-          <p style={{ margin: 0 }}>Todavia no tienes eventos guardados.</p>
+          <h3 className="upcoming-title">Cumpleaños</h3>
+          <p style={{ margin: 0 }}>Todavia no tienes cumpleaños guardados.</p>
         </div>
       )}
 
       {!loading && !error && eventosOrdenados.length > 0 && (
         <div className="upcoming-events" style={{ marginTop: '2rem' }}>
-          <h3 className="upcoming-title">Eventos Guardados</h3>
+          <h3 className="upcoming-title">Cumpleaños Guardados</h3>
           <div className="events-list">
             {eventosOrdenados.map((evento) => {
               const fecha = normalizeFecha(evento)

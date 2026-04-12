@@ -24,6 +24,7 @@ function App() {
   const [alumnoApoderadoId, setAlumnoApoderadoId] = useState(() => {
     return window.localStorage.getItem('alumno_apoderado_id_activo') || ''
   })
+  const [generoAlumnoActivo, setGeneroAlumnoActivo] = useState(null)
   const [rolIngreso, setRolIngreso] = useState('')
   const [errorIngreso, setErrorIngreso] = useState('')
 
@@ -83,6 +84,19 @@ function App() {
     const alumno = alumnosCurso.find((item) => String(item.id) === String(alumnoId))
     window.localStorage.setItem('alumno_apoderado_id_activo', String(alumnoId))
     window.localStorage.setItem('alumno_apoderado_nombre_activo', alumno?.nombre || '')
+
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('alumnos')
+          .select('genero')
+          .eq('id', Number(alumnoId))
+          .single()
+        setGeneroAlumnoActivo(data?.genero ?? null)
+      } catch {
+        setGeneroAlumnoActivo(null)
+      }
+    })()
 
     const terminosAceptados = window.localStorage.getItem('terminos_aceptados') === 'true'
     if (terminosAceptados && alumnoId) {
@@ -315,6 +329,18 @@ function App() {
   const esApoderado = rolIngreso === 'apoderado'
   const alumnoApoderadoSeleccionado = alumnosCurso.find((alumno) => String(alumno.id) === String(alumnoApoderadoId))
 
+  const handleCambiarGenero = async (nuevoGenero) => {
+    const alumnoId = Number(alumnoApoderadoId)
+    if (!alumnoId) return
+    const valor = nuevoGenero === '' ? null : nuevoGenero
+    setGeneroAlumnoActivo(valor)
+    try {
+      await supabase.from('alumnos').update({ genero: valor }).eq('id', alumnoId)
+    } catch (err) {
+      console.warn('No se pudo actualizar el género:', err)
+    }
+  }
+
   return (
     <div className="container">
       <PageTopBar />
@@ -410,9 +436,37 @@ function App() {
                         ))}
                       </select>
                       {alumnoApoderadoSeleccionado && (
-                        <p className="app-subtitle" style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '1rem' }}>
-                          Alumno activo: <strong>{alumnoApoderadoSeleccionado.nombre}</strong>
-                        </p>
+                        <>
+                          <p className="app-subtitle" style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '1rem' }}>
+                            Alumno activo: <strong>{alumnoApoderadoSeleccionado.nombre}</strong>
+                          </p>
+                          <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <label
+                              htmlFor="generoAlumno"
+                              style={{ fontSize: '0.8rem', color: '#6b7280', whiteSpace: 'nowrap' }}
+                            >
+                              Género:
+                            </label>
+                            <select
+                              id="generoAlumno"
+                              value={generoAlumnoActivo ?? ''}
+                              onChange={(e) => handleCambiarGenero(e.target.value)}
+                              style={{
+                                fontSize: '0.8rem',
+                                color: '#374151',
+                                border: '1px solid #d1d5db',
+                                borderRadius: '6px',
+                                padding: '0.2rem 0.4rem',
+                                background: '#f9fafb',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="">No especificado</option>
+                              <option value="niña">Niña</option>
+                              <option value="niño">Niño</option>
+                            </select>
+                          </div>
+                        </>
                       )}
                     </>
                   )}
@@ -423,7 +477,7 @@ function App() {
             <div className="buttons-container">
               {esCoordinador && (
                 <button className="btn btn-primary" onClick={handleCreateEvent}>
-                  Crear evento
+                  Crear cumpleaños
                 </button>
               )}
               <button
@@ -431,7 +485,7 @@ function App() {
                 onClick={handleViewEvents}
                 disabled={esApoderado && !alumnoApoderadoId}
               >
-                Ver mis eventos
+                Ver mis cumpleaños
               </button>
               {esCoordinador && (
                 <button className="btn btn-secondary" onClick={handleManageCourse}>
@@ -445,18 +499,18 @@ function App() {
               )}
               {esApoderado && (
                 <p className="app-subtitle" style={{ margin: 0, fontSize: '1rem' }}>
-                  Puedes revisar eventos y participar subiendo tu comprobante.
+                  Puedes revisar cumpleaños y participar subiendo tu comprobante.
                 </p>
               )}
             </div>
           </>
         )}
 
-        {loadingUpcoming && <p>Cargando próximos eventos...</p>}
+        {loadingUpcoming && <p>Cargando próximos cumpleaños...</p>}
 
         {!loadingUpcoming && upcomingEvents.length > 0 && (
           <div className="upcoming-events">
-            <h3 className="upcoming-title">Próximos eventos</h3>
+            <h3 className="upcoming-title">Próximos cumpleaños</h3>
             <div className="events-list">
               {upcomingEvents.map(event => (
                 <div key={event.id} className="event-item">

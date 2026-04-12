@@ -10,6 +10,7 @@ function CrearEvento() {
   const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const [alumnos, setAlumnos] = useState([])
   const [selectedCumpleaneros, setSelectedCumpleaneros] = useState([])
+  const [invitados, setInvitados] = useState('todos')
   const [formData, setFormData] = useState({
     fecha: '',
     cuotaMinima: '10000',
@@ -97,6 +98,7 @@ function CrearEvento() {
       tipo_cuenta: formData.coordinadorTipoCuenta,
       numero_cuenta: formData.coordinadorNumeroCuenta,
       email_pago: formData.coordinadorEmail,
+      invitados,
     }
 
     const { data, error: eventoError } = await supabase
@@ -146,12 +148,12 @@ function CrearEvento() {
   return (
     <div className="page-container">
       <PageTopBar />
-      <h1 className="page-title">Crear Evento</h1>
+      <h1 className="page-title">Crear Cumpleaños</h1>
       
       <form className="event-form" onSubmit={handleSubmit}>
         {/* Sección de Detalles del Evento */}
         <div className="form-section">
-          <h2 className="section-title">Detalles del Evento</h2>
+          <h2 className="section-title">Detalles del Cumpleaños</h2>
           
           <div className="form-group">
             <label>Seleccionar Cumpleañeros *</label>
@@ -175,7 +177,7 @@ function CrearEvento() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="fecha">Fecha del Evento *</label>
+            <label htmlFor="fecha">Fecha del Cumpleaños *</label>
             <input
               type="date"
               id="fecha"
@@ -214,6 +216,19 @@ function CrearEvento() {
                 required
               />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="invitados">¿Quiénes están invitados?</label>
+            <select
+              id="invitados"
+              value={invitados}
+              onChange={(e) => setInvitados(e.target.value)}
+            >
+              <option value="todos">Todos (niños y niñas)</option>
+              <option value="niñas">Solo niñas</option>
+              <option value="niños">Solo niños</option>
+            </select>
           </div>
 
           {/* Presupuesto Estimado */}
@@ -343,7 +358,7 @@ function CrearEvento() {
           </div>
         </div>
 
-        <button type="submit" className="form-submit">Crear Evento</button>
+        <button type="submit" className="form-submit">Crear Cumpleaños</button>
       </form>
     </div>
   )
