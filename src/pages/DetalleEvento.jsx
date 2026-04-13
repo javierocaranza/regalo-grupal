@@ -547,6 +547,7 @@ function DetalleEvento() {
   }
 
   const participantesRegalo = participantes.filter((p) => p.participa_regalo !== false)
+  const participantesSoloCumple = participantes.filter((p) => p.participa_regalo === false)
   const todosHanPagado =
     participantesRegalo.length > 0 && participantesRegalo.every((p) => p.estado === 'pagado')
 
@@ -1042,8 +1043,19 @@ function DetalleEvento() {
                       </div>
                     </>
                   ) : (
-                    <div className="event-details" style={{ marginTop: '0.5rem' }}>
-                      Estás anotado para el cumpleaños. No necesitas realizar pago ni subir comprobante.
+                    <div
+                      style={{
+                        marginTop: '0.65rem',
+                        background: '#fff3cd',
+                        border: '1px solid #ffe69c',
+                        borderRadius: '8px',
+                        padding: '0.65rem 0.8rem',
+                        color: '#664d03',
+                        fontSize: '0.9rem',
+                        fontWeight: 600
+                      }}
+                    >
+                      Estás anotado para el cumpleaños 🎂 · No participas del regalo grupal
                     </div>
                   )}
                 </div>
@@ -1216,92 +1228,153 @@ function DetalleEvento() {
             {participantes.length === 0 ? (
               <p style={{ margin: 0 }}>No hay participantes registrados todavia.</p>
             ) : (
-              <div className="events-list">
-                {participantes.map((participante, index) => (
-                  <div key={participante.id ?? index} className="event-item admin-participante-row">
-                    <div className="event-name">
-                      {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
-                    </div>
-                    <div className="event-details">
-                      Participación: {participante.participa_regalo === false ? 'Solo cumpleaños' : 'Cumpleaños + regalo'}
-                    </div>
-                    <div className="event-details">Estado: {formatEstadoPago(participante)}</div>
+              <>
+                {esAdmin ? (
+                  <>
+                    <h4 className="upcoming-title" style={{ marginBottom: '0.8rem' }}>Regalo y cumpleaños 🎁</h4>
+                    {participantesRegalo.length === 0 ? (
+                      <p style={{ margin: '0 0 1rem 0' }}>No hay participantes en el regalo grupal.</p>
+                    ) : (
+                      <div className="events-list">
+                        {participantesRegalo.map((participante, index) => (
+                          <div key={participante.id ?? index} className="event-item admin-participante-row">
+                            <div className="event-name">
+                              {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
+                            </div>
+                            <div className="event-details">Estado: {formatEstadoPago(participante)}</div>
 
-                    {(participante.imagen_comprobante || participante.comprobante_url) && (
-                      <a
-                        href={participante.imagen_comprobante || participante.comprobante_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="comprobante-link"
-                      >
-                        Ver comprobante
-                      </a>
-                    )}
+                            {(participante.imagen_comprobante || participante.comprobante_url) && (
+                              <a
+                                href={participante.imagen_comprobante || participante.comprobante_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="comprobante-link"
+                              >
+                                Ver comprobante
+                              </a>
+                            )}
 
-                    {getEstadoNormalizado(participante) === 'comprobante_subido' && (
-                      <>
-                        {!(participante.imagen_comprobante || participante.comprobante_url) && (
-                          <div className="event-details">No hay URL de comprobante disponible.</div>
-                        )}
-                        {esAdmin && (
-                          <div className="admin-acciones">
+                            {getEstadoNormalizado(participante) === 'comprobante_subido' && (
+                              <>
+                                {!(participante.imagen_comprobante || participante.comprobante_url) && (
+                                  <div className="event-details">No hay URL de comprobante disponible.</div>
+                                )}
+                                <div className="admin-acciones">
+                                  <button
+                                    type="button"
+                                    className="btn btn-aprobar"
+                                    disabled={actualizandoPagoId === participante.id}
+                                    onClick={() => cambiarEstadoPago(participante.id, 'pagado')}
+                                  >
+                                    {actualizandoPagoId === participante.id ? '...' : 'Aprobar'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-rechazar"
+                                    disabled={actualizandoPagoId === participante.id}
+                                    onClick={() => cambiarEstadoPago(participante.id, 'pendiente')}
+                                  >
+                                    {actualizandoPagoId === participante.id ? '...' : 'Rechazar'}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
                             <button
                               type="button"
-                              className="btn btn-aprobar"
-                              disabled={actualizandoPagoId === participante.id}
-                              onClick={() => cambiarEstadoPago(participante.id, 'pagado')}
+                              className="btn btn-rechazar btn-small"
+                              disabled={desinscribiendoId === participante.id}
+                              onClick={() => desinscribirParticipante(participante.id)}
                             >
-                              {actualizandoPagoId === participante.id ? '...' : 'Aprobar'}
+                              {desinscribiendoId === participante.id ? 'Desinscribiendo...' : 'Desinscribir'}
                             </button>
+
                             <button
                               type="button"
-                              className="btn btn-rechazar"
-                              disabled={actualizandoPagoId === participante.id}
-                              onClick={() => cambiarEstadoPago(participante.id, 'pendiente')}
+                              className="btn btn-secondary btn-small"
+                              onClick={() => toggleDetalleParticipante(participante.id)}
                             >
-                              {actualizandoPagoId === participante.id ? '...' : 'Rechazar'}
+                              {detalleParticipanteAbiertoId === participante.id ? 'Ocultar detalle' : 'Ver detalle'}
                             </button>
+
+                            {detalleParticipanteAbiertoId === participante.id && (
+                              <div className="participante-detalle-box">
+                                <div className="event-details">ID participante: {participante.id}</div>
+                                <div className="event-details">Estado actual: {formatEstadoPago(participante)}</div>
+                                <div className="event-details">Revisa el comprobante y gestiona el estado directamente en la tarjeta principal.</div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </>
-                    )}
-
-                    {esAdmin && (
-                      <button
-                        type="button"
-                        className="btn btn-rechazar btn-small"
-                        disabled={desinscribiendoId === participante.id}
-                        onClick={() => desinscribirParticipante(participante.id)}
-                      >
-                        {desinscribiendoId === participante.id ? 'Desinscribiendo...' : 'Desinscribir'}
-                      </button>
-                    )}
-
-                    {esAdmin && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={() => toggleDetalleParticipante(participante.id)}
-                      >
-                        {detalleParticipanteAbiertoId === participante.id ? 'Ocultar detalle' : 'Ver detalle'}
-                      </button>
-                    )}
-
-                    {esAdmin && detalleParticipanteAbiertoId === participante.id && (
-                      <div className="participante-detalle-box">
-                        <div className="event-details">
-                          ID participante: {participante.id}
-                        </div>
-                        <div className="event-details">
-                          Estado actual: {formatEstadoPago(participante)}
-                        </div>
-
-                        <div className="event-details">Revisa el comprobante y gestiona el estado directamente en la tarjeta principal.</div>
+                        ))}
                       </div>
                     )}
+
+                    <h4 className="upcoming-title" style={{ marginTop: '1.2rem', marginBottom: '0.8rem' }}>Solo cumpleaños 🎂</h4>
+                    {participantesSoloCumple.length === 0 ? (
+                      <p style={{ margin: 0 }}>No hay participantes de solo cumpleaños.</p>
+                    ) : (
+                      <div className="events-list">
+                        {participantesSoloCumple.map((participante, index) => (
+                          <div key={participante.id ?? `solo-${index}`} className="event-item admin-participante-row">
+                            <div className="event-name">
+                              {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
+                            </div>
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '0.3rem 0.65rem',
+                                borderRadius: '999px',
+                                background: '#fff3cd',
+                                border: '1px solid #ffe69c',
+                                color: '#664d03',
+                                fontSize: '0.78rem',
+                                fontWeight: 700
+                              }}
+                            >
+                              Solo asiste al cumpleaños · No participa del regalo grupal
+                            </div>
+
+                            <button
+                              type="button"
+                              className="btn btn-rechazar btn-small"
+                              disabled={desinscribiendoId === participante.id}
+                              onClick={() => desinscribirParticipante(participante.id)}
+                            >
+                              {desinscribiendoId === participante.id ? 'Desinscribiendo...' : 'Desinscribir'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="events-list">
+                    {participantes.map((participante, index) => (
+                      <div key={participante.id ?? index} className="event-item admin-participante-row">
+                        <div className="event-name">
+                          {participante.nombre_participante || participante.alumnoNombre || 'Sin nombre'}
+                        </div>
+                        <div className="event-details">
+                          Participación: {participante.participa_regalo === false ? 'Solo cumpleaños' : 'Cumpleaños + regalo'}
+                        </div>
+                        <div className="event-details">Estado: {formatEstadoPago(participante)}</div>
+
+                        {(participante.imagen_comprobante || participante.comprobante_url) && (
+                          <a
+                            href={participante.imagen_comprobante || participante.comprobante_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="comprobante-link"
+                          >
+                            Ver comprobante
+                          </a>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </>
