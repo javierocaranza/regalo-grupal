@@ -11,6 +11,7 @@ function CrearEvento() {
   const [alumnos, setAlumnos] = useState([])
   const [selectedCumpleaneros, setSelectedCumpleaneros] = useState([])
   const [invitados, setInvitados] = useState('todos')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     fecha: '',
     cuotaMinima: '10000',
@@ -81,59 +82,66 @@ function CrearEvento() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (selectedCumpleaneros.length === 0) {
-      alert('Debes seleccionar al menos un cumpleañero.')
-      return
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
+    try {
+      if (selectedCumpleaneros.length === 0) {
+        alert('Debes seleccionar al menos un cumpleañero.')
+        return
+      }
+
+      const eventoData = {
+        fecha_evento: formData.fecha,
+        cuota_minima: parseFloat(formData.cuotaMinima),
+        cuota_maxima: parseFloat(formData.cuotaMaxima),
+        descripcion_regalo: formData.descripcion,
+        curso_id: cursoIdActivo ? parseInt(cursoIdActivo, 10) : null,
+        nombre_coordinador: formData.coordinadorNombre,
+        rut_coordinador: formData.coordinadorRut,
+        banco: formData.coordinadorBanco,
+        tipo_cuenta: formData.coordinadorTipoCuenta,
+        numero_cuenta: formData.coordinadorNumeroCuenta,
+        email_pago: formData.coordinadorEmail,
+        invitados,
+      }
+
+      const { data, error: eventoError } = await supabase
+        .from('eventos')
+        .insert(eventoData)
+        .select('id')
+        .single()
+
+      if (eventoError) {
+        console.error('Error creando evento:', eventoError)
+        alert('Error al crear el evento.')
+        return
+      }
+
+      const eventoId = data.id
+
+      const cumpleanerosData = selectedCumpleaneros.map(alumnoId => ({
+        evento_id: eventoId,
+        alumno_id: alumnoId,
+      }))
+
+      console.log('cumpleaneros a insertar:', cumpleanerosData)
+      const { error: cumpleanerosError } = await supabase
+        .from('cumpleaneros')
+        .insert(cumpleanerosData)
+
+      if (cumpleanerosError) {
+        console.error('Error agregando cumpleañeros:', cumpleanerosError)
+        alert('Evento creado, pero error al agregar cumpleañeros.')
+        return
+      }
+
+      alert('¡Evento creado exitosamente!')
+      const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
+      navigate(`/mis-eventos${adminParam}`)
+    } finally {
+      setIsSubmitting(false)
     }
-
-    const eventoData = {
-      fecha_evento: formData.fecha,
-      cuota_minima: parseFloat(formData.cuotaMinima),
-      cuota_maxima: parseFloat(formData.cuotaMaxima),
-      descripcion_regalo: formData.descripcion,
-      curso_id: cursoIdActivo ? parseInt(cursoIdActivo, 10) : null,
-      nombre_coordinador: formData.coordinadorNombre,
-      rut_coordinador: formData.coordinadorRut,
-      banco: formData.coordinadorBanco,
-      tipo_cuenta: formData.coordinadorTipoCuenta,
-      numero_cuenta: formData.coordinadorNumeroCuenta,
-      email_pago: formData.coordinadorEmail,
-      invitados,
-    }
-
-    const { data, error: eventoError } = await supabase
-      .from('eventos')
-      .insert(eventoData)
-      .select('id')
-      .single()
-
-    if (eventoError) {
-      console.error('Error creando evento:', eventoError)
-      alert('Error al crear el evento.')
-      return
-    }
-
-    const eventoId = data.id
-
-    const cumpleanerosData = selectedCumpleaneros.map(alumnoId => ({
-      evento_id: eventoId,
-      alumno_id: alumnoId,
-    }))
-
-    console.log('cumpleaneros a insertar:', cumpleanerosData)
-    const { error: cumpleanerosError } = await supabase
-      .from('cumpleaneros')
-      .insert(cumpleanerosData)
-
-    if (cumpleanerosError) {
-      console.error('Error agregando cumpleañeros:', cumpleanerosError)
-      alert('Evento creado, pero error al agregar cumpleañeros.')
-      return
-    }
-
-    alert('¡Evento creado exitosamente!')
-    const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
-    navigate(`/mis-eventos${adminParam}`)
   }
 
   // Calcular presupuesto estimado basado en cumpleañeros seleccionados
@@ -358,7 +366,7 @@ function CrearEvento() {
           </div>
         </div>
 
-        <button type="submit" className="form-submit">Crear Cumpleaños</button>
+        <button type="submit" className="form-submit" disabled={isSubmitting}>Crear Cumpleaños</button>
       </form>
     </div>
   )
