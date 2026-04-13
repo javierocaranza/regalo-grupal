@@ -40,7 +40,7 @@ function Acusete() {
 
     if (eventosCursoError) {
       console.error('Error cargando eventos del curso:', eventosCursoError)
-      setError('No se pudieron cargar los eventos del curso.')
+      setError('No se pudieron cargar los cumpleaños del curso.')
       setLoading(false)
       return
     }
@@ -99,7 +99,7 @@ function Acusete() {
 
     if (eventosError) {
       console.error('Error cargando eventos usados en participantes:', eventosError)
-      setError('No se pudieron cargar los eventos relacionados.')
+      setError('No se pudieron cargar los cumpleaños relacionados.')
       setLoading(false)
       return
     }
@@ -139,7 +139,7 @@ function Acusete() {
       const eventoInfo = eventosMap[p.evento_id]
       porAlumno[key].eventos.push({
         eventoId: p.evento_id,
-        desc: eventoInfo?.descripcion_regalo || `Evento ${p.evento_id}`,
+        desc: eventoInfo?.descripcion_regalo || `Cumpleaños ${p.evento_id}`,
         cuota: Number(p.cuota) || 0
       })
     }
@@ -155,7 +155,7 @@ function Acusete() {
         const evento = eventosMap[eventoId]
         const desc =
           evento?.descripcion_regalo ||
-          `Evento ${eventoId}`
+          `Cumpleaños ${eventoId}`
         const fecha = evento?.fecha_evento || null
         porEvento[eventoId] = { eventoId, desc, fecha, participantes: [] }
       }
@@ -230,7 +230,7 @@ function Acusete() {
           onClick={() => setVista('evento')}
           disabled={vista === 'evento'}
         >
-          Ver por evento
+          Ver por cumpleaños
         </button>
       </div>
 
@@ -280,7 +280,7 @@ function Acusete() {
 
           {vista === 'evento' && (
             <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
-            <h3 className="upcoming-title">Resumen por evento</h3>
+            <h3 className="upcoming-title">Resumen por cumpleaños</h3>
             {resumenEventos.length === 0 ? (
               <p style={{ margin: 0 }}>No hay pagos pendientes.</p>
             ) : (

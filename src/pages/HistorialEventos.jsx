@@ -93,7 +93,7 @@ function HistorialEventos() {
 
         if (alumnosFallbackError) {
           console.error('Error cargando alumnos del curso:', alumnosFallbackError)
-          setError('No se pudo cargar el historial de eventos.')
+          setError('No se pudo cargar el historial de cumpleaños.')
           setEventos([])
           setLoading(false)
           return

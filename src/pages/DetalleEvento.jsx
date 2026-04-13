@@ -114,7 +114,7 @@ function DetalleEvento() {
 
       const eventoId = parseInt(id, 10)
       if (!eventoId) {
-        setError('ID de evento invalido.')
+        setError('ID de cumpleaños invalido.')
         setLoading(false)
         return
       }
@@ -127,7 +127,7 @@ function DetalleEvento() {
 
       if (eventoError) {
         console.error('Error cargando evento:', eventoError)
-        setError('No se pudo cargar el detalle del evento.')
+        setError('No se pudo cargar el detalle del cumpleaños.')
         setLoading(false)
         return
       }
@@ -259,7 +259,7 @@ function DetalleEvento() {
 
     const eventoId = parseInt(id, 10)
     if (!eventoId) {
-      setErrorFlujo('No se pudo identificar el evento.')
+      setErrorFlujo('No se pudo identificar el cumpleaños.')
       return
     }
 
@@ -559,7 +559,7 @@ function DetalleEvento() {
     if (eventoError) {
       console.error('Error actualizando evento:', eventoError)
       setConfirmandoCuota(false)
-      setErrorAdmin('No se pudo guardar el monto total en el evento.')
+      setErrorAdmin('No se pudo guardar el monto total en el cumpleaños.')
       return
     }
 
@@ -588,7 +588,7 @@ function DetalleEvento() {
       prev.map((p) => ({ ...p, cuota: p.participa_regalo === false ? 0 : cuotaCalculada }))
     )
     setMensajeAdmin(
-      `Cuota de $${cuotaCalculada.toLocaleString('es-CL')} confirmada. El evento paso a estado "en_pago".`
+      `Cuota de $${cuotaCalculada.toLocaleString('es-CL')} confirmada. El cumpleaños paso a estado "en_pago".`
     )
   }
 
@@ -614,12 +614,12 @@ function DetalleEvento() {
 
     if (updateError) {
       console.error('Error completando evento:', updateError)
-      setErrorAdmin('No se pudo marcar el evento como completado.')
+      setErrorAdmin('No se pudo marcar el cumpleaños como completado.')
       return
     }
 
     setEvento(data)
-    setMensajeAdmin('🎉 ¡Evento completado! Todos los pagos fueron confirmados.')
+    setMensajeAdmin('🎉 ¡Cumpleaños completado! Todos los pagos fueron confirmados.')
   }
 
   const resetearParticipacionLocal = () => {
@@ -683,7 +683,7 @@ function DetalleEvento() {
     }
 
     if (String(estadoEvento).toLowerCase() !== 'en_pago') {
-      setErrorFlujo('Solo puedes subir o cambiar comprobante cuando el evento está en pago.')
+      setErrorFlujo('Solo puedes subir o cambiar comprobante cuando el cumpleaños está en pago.')
       return
     }
 
@@ -910,7 +910,7 @@ function DetalleEvento() {
 
                   {!esInvitadoExterno && participanteSeleccionado && (
                     <div className="participante-detalle-box">
-                      <div className="event-details">Este alumno ya está inscrito en este evento.</div>
+                      <div className="event-details">Este alumno ya está inscrito en este cumpleaños.</div>
                       <div className="event-details">Estado actual: {formatEstadoPago(participanteSeleccionado)}</div>
                       <div className="event-details">
                         Tipo de participación: {participanteSeleccionado.participa_regalo === false ? 'Solo cumpleaños' : 'Cumpleaños + regalo'}

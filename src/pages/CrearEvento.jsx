@@ -114,7 +114,7 @@ function CrearEvento() {
 
       if (eventoError) {
         console.error('Error creando evento:', eventoError)
-        alert('Error al crear el evento.')
+        alert('Error al crear el cumpleaños.')
         return
       }
 
@@ -132,11 +132,11 @@ function CrearEvento() {
 
       if (cumpleanerosError) {
         console.error('Error agregando cumpleañeros:', cumpleanerosError)
-        alert('Evento creado, pero error al agregar cumpleañeros.')
+        alert('Cumpleaños creado, pero error al agregar cumpleañeros.')
         return
       }
 
-      alert('¡Evento creado exitosamente!')
+      alert('¡Cumpleaños creado exitosamente!')
       const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
       navigate(`/mis-eventos${adminParam}`)
     } finally {
