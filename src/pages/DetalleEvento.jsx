@@ -48,6 +48,72 @@ function DetalleEvento() {
   const [errorAdmin, setErrorAdmin] = useState('')
   const [mensajeAdmin, setMensajeAdmin] = useState('')
   const [detalleParticipanteAbiertoId, setDetalleParticipanteAbiertoId] = useState(null)
+  const [modalPinCoordAbierto, setModalPinCoordAbierto] = useState(false)
+  const [pinCoordActual, setPinCoordActual] = useState('')
+  const [pinCoordNuevo, setPinCoordNuevo] = useState('')
+  const [confirmarPinCoordNuevo, setConfirmarPinCoordNuevo] = useState('')
+  const [cambiandoPinCoord, setCambiandoPinCoord] = useState(false)
+  const [errorPinCoord, setErrorPinCoord] = useState('')
+  const [mensajePinCoord, setMensajePinCoord] = useState('')
+
+  const cambiarPinCoordinador = async () => {
+    const actualNorm = String(pinCoordActual).trim()
+    const nuevoNorm = String(pinCoordNuevo).trim()
+    const confirmarNorm = String(confirmarPinCoordNuevo).trim()
+
+    if (!actualNorm || !nuevoNorm || !confirmarNorm) {
+      setErrorPinCoord('Completa todos los campos.')
+      return
+    }
+
+    if (nuevoNorm !== confirmarNorm) {
+      setErrorPinCoord('PIN nuevo y Confirmar PIN nuevo deben ser iguales.')
+      return
+    }
+
+    setCambiandoPinCoord(true)
+    setErrorPinCoord('')
+
+    const { data: cursoData, error: cursoError } = await supabase
+      .from('cursos')
+      .select('pin_coordinador')
+      .eq('id', cursoIdActivo)
+      .single()
+
+    if (cursoError || !cursoData) {
+      setCambiandoPinCoord(false)
+      setErrorPinCoord('No se pudo verificar el PIN actual.')
+      return
+    }
+
+    const pinGuardado = cursoData.pin_coordinador === null || cursoData.pin_coordinador === undefined
+      ? ''
+      : String(cursoData.pin_coordinador).trim()
+
+    if (actualNorm !== pinGuardado) {
+      setCambiandoPinCoord(false)
+      setErrorPinCoord('PIN actual incorrecto.')
+      return
+    }
+
+    const { error: updateError } = await supabase
+      .from('cursos')
+      .update({ pin_coordinador: nuevoNorm })
+      .eq('id', cursoIdActivo)
+
+    setCambiandoPinCoord(false)
+
+    if (updateError) {
+      setErrorPinCoord('No se pudo actualizar el PIN.')
+      return
+    }
+
+    setPinCoordActual('')
+    setPinCoordNuevo('')
+    setConfirmarPinCoordNuevo('')
+    setModalPinCoordAbierto(false)
+    setMensajePinCoord('PIN actualizado correctamente.')
+  }
 
   const storageBucket = 'comprobantes'
   const localStorageKey = `participacion_evento_${id}`
@@ -1114,7 +1180,27 @@ function DetalleEvento() {
 
           {esAdmin && (
             <div className="upcoming-events admin-panel" style={{ marginTop: '1.5rem' }}>
-              <h3 className="upcoming-title">Panel coordinador — Gestion del cumpleaños</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                <h3 className="upcoming-title" style={{ margin: 0 }}>Panel coordinador — Gestion del cumpleaños</h3>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setPinCoordActual('')
+                    setPinCoordNuevo('')
+                    setConfirmarPinCoordNuevo('')
+                    setErrorPinCoord('')
+                    setMensajePinCoord('')
+                    setModalPinCoordAbierto(true)
+                  }}
+                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', flexShrink: 0 }}
+                >
+                  Cambiar PIN
+                </button>
+              </div>
+              {mensajePinCoord && (
+                <p className="mensaje-ok" style={{ margin: '0 0 0.5rem 0' }}>{mensajePinCoord}</p>
+              )}
 
               <div className="admin-gestion-box">
                 {estadoEvento === 'abierto' && (
@@ -1424,6 +1510,93 @@ function DetalleEvento() {
             )}
           </div>
         </>
+      )}
+
+      {modalPinCoordAbierto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 50
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              background: '#fff',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 12px 30px rgba(0,0,0,0.2)',
+              padding: '1.2rem'
+            }}
+          >
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: '#111827' }}>Cambiar mi PIN</h3>
+
+            <div className="form-group">
+              <label htmlFor="pinCoordActual">PIN actual</label>
+              <input
+                id="pinCoordActual"
+                type="password"
+                value={pinCoordActual}
+                onChange={(e) => { setPinCoordActual(e.target.value); setErrorPinCoord('') }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="pinCoordNuevo">PIN nuevo</label>
+              <input
+                id="pinCoordNuevo"
+                type="password"
+                value={pinCoordNuevo}
+                onChange={(e) => { setPinCoordNuevo(e.target.value); setErrorPinCoord('') }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+              <label htmlFor="confirmarPinCoordNuevo">Confirmar PIN nuevo</label>
+              <input
+                id="confirmarPinCoordNuevo"
+                type="password"
+                value={confirmarPinCoordNuevo}
+                onChange={(e) => { setConfirmarPinCoordNuevo(e.target.value); setErrorPinCoord('') }}
+              />
+            </div>
+
+            {errorPinCoord && (
+              <p className="mensaje-error" style={{ marginTop: '0.3rem', marginBottom: '0.7rem' }}>
+                {errorPinCoord}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.55rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setModalPinCoordAbierto(false)}
+                style={{ flex: 1 }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={cambiarPinCoordinador}
+                disabled={cambiandoPinCoord}
+                style={{ flex: 1 }}
+              >
+                {cambiandoPinCoord ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
