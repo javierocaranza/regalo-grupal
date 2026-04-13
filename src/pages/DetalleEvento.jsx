@@ -22,6 +22,7 @@ function DetalleEvento() {
   const [selectedParticipante, setSelectedParticipante] = useState('')
   const [nombreParticipante, setNombreParticipante] = useState('')
   const [participaRegaloSeleccion, setParticipaRegaloSeleccion] = useState('true')
+  const [mostrarOpcionesInscripcion, setMostrarOpcionesInscripcion] = useState(false)
   const [confirmandoParticipacion, setConfirmandoParticipacion] = useState(false)
   const [subiendoComprobante, setSubiendoComprobante] = useState(false)
   const [subiendoComprobanteDetalleId, setSubiendoComprobanteDetalleId] = useState(null)
@@ -240,8 +241,19 @@ function DetalleEvento() {
   const participanteSeleccionado = alumnoSeleccionadoId
     ? participantes.find((p) => Number(p.alumno_id) === alumnoSeleccionadoId)
     : null
+  const cumpleanerosTitulo =
+    evento?.nombres_cumpleaneros ||
+    evento?.nombresCumpleaneros ||
+    evento?.cumpleanero ||
+    evento?.nombre_cumpleanero ||
+    'Cumpleaños del curso'
+  const esEventoAbierto = ['abierto', 'activo'].includes(estadoEventoNormalizado)
+  const esEventoEnPago = estadoEventoNormalizado === 'en_pago'
+  const esEventoCompletado = estadoEventoNormalizado === 'completado'
+  const estadoMiParticipacion = miParticipacion ? getEstadoNormalizado(miParticipacion) : ''
+  const miParticipaRegalo = miParticipacion?.participa_regalo !== false
 
-  const confirmarParticipacion = async () => {
+  const confirmarParticipacion = async (participaRegaloOverride = null) => {
     setErrorFlujo('')
     setMensajeFlujo('')
 
@@ -272,7 +284,7 @@ function DetalleEvento() {
     const payloadBase = {
       evento_id: eventoId,
       estado: 'pendiente',
-      participa_regalo: participaRegaloSeleccion === 'true'
+      participa_regalo: participaRegaloOverride ?? (participaRegaloSeleccion === 'true')
     }
 
     let payload = payloadBase
@@ -342,10 +354,44 @@ function DetalleEvento() {
       setNombreParticipante('')
     }
     window.localStorage.setItem(localStorageKey, String(participanteIdCreado))
+    setMostrarOpcionesInscripcion(false)
     setMensajeFlujo(
       payloadBase.participa_regalo
         ? 'Tu participacion fue confirmada con estado pendiente.'
         : 'Tu participación fue confirmada solo para el cumpleaños.'
+    )
+  }
+
+  const cambiarParticipacionRegalo = async (participaRegalo) => {
+    if (!miParticipacion?.id) return
+
+    setErrorFlujo('')
+    setMensajeFlujo('')
+
+    const { data, error: updateError } = await supabase
+      .from('participantes')
+      .update({ participa_regalo: participaRegalo, cuota: participaRegalo ? miParticipacion.cuota || 0 : 0 })
+      .eq('id', miParticipacion.id)
+      .select('*')
+      .single()
+
+    if (updateError) {
+      console.error('Error actualizando tipo de participación:', updateError)
+      setErrorFlujo('No se pudo actualizar tu tipo de participación.')
+      return
+    }
+
+    const participanteActualizado = {
+      ...data,
+      alumnoNombre: miParticipacion.alumnoNombre || 'Sin nombre'
+    }
+
+    setMiParticipacion(participanteActualizado)
+    setParticipantes((prev) => prev.map((p) => (p.id === participanteActualizado.id ? participanteActualizado : p)))
+    setMensajeFlujo(
+      participaRegalo
+        ? 'Ahora participas en el regalo grupal 🎁'
+        : 'Quedaste inscrito solo para el cumpleaños 🎂'
     )
   }
 
@@ -820,41 +866,31 @@ function DetalleEvento() {
           <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
             <h3 className="upcoming-title">Participacion de Apoderados</h3>
             <div className="event-item">
-              {!miParticipacion && (
+              {esAdmin && !miParticipacion && (
                 <div className="participacion-form">
-                  {esApoderado ? (
-                    <>
-                      <label className="participacion-label">Alumno seleccionado</label>
-                      <div className="participacion-input" style={{ background: '#f8f9fa', cursor: 'not-allowed' }}>
-                        {alumnoApoderadoNombre || 'Alumno seleccionado'}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <label htmlFor="alumnoParticipante" className="participacion-label">
-                        {esAdmin ? 'Agregar alumno participante' : 'Selecciona alumno participante'}
-                      </label>
-                      <select
-                        id="alumnoParticipante"
-                        className="participacion-input"
-                        value={selectedParticipante}
-                        onChange={(e) => {
-                          setSelectedParticipante(e.target.value)
-                          if (e.target.value !== OTRO_INVITADO_VALUE) {
-                            setNombreParticipante('')
-                          }
-                        }}
-                      >
-                        <option value="">Selecciona una opcion</option>
-                        {alumnosDisponibles.map((alumno) => (
-                          <option key={alumno.id} value={String(alumno.id)}>
-                            {alumno.nombre}
-                          </option>
-                        ))}
-                        {!esAdmin && <option value={OTRO_INVITADO_VALUE}>Otro (invitado externo)</option>}
-                      </select>
-                    </>
-                  )}
+                  <>
+                    <label htmlFor="alumnoParticipante" className="participacion-label">
+                      Agregar alumno participante
+                    </label>
+                    <select
+                      id="alumnoParticipante"
+                      className="participacion-input"
+                      value={selectedParticipante}
+                      onChange={(e) => {
+                        setSelectedParticipante(e.target.value)
+                        if (e.target.value !== OTRO_INVITADO_VALUE) {
+                          setNombreParticipante('')
+                        }
+                      }}
+                    >
+                      <option value="">Selecciona una opcion</option>
+                      {alumnosDisponibles.map((alumno) => (
+                        <option key={alumno.id} value={String(alumno.id)}>
+                          {alumno.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </>
 
                   {esInvitadoExterno && (
                     <>
@@ -925,34 +961,6 @@ function DetalleEvento() {
                     </div>
                   )}
 
-                  {!esAdmin && (
-                    <div className="participante-detalle-box" style={{ marginTop: '0.75rem' }}>
-                      <div className="event-details" style={{ marginBottom: '0.35rem' }}>
-                        ¿Cómo participarás?
-                      </div>
-                      <label className="event-details" style={{ display: 'block', marginBottom: '0.25rem' }}>
-                        <input
-                          type="radio"
-                          name="participaRegalo"
-                          value="true"
-                          checked={participaRegaloSeleccion === 'true'}
-                          onChange={(e) => setParticipaRegaloSeleccion(e.target.value)}
-                        />{' '}
-                        Participo en el cumpleaños y en el regalo 🎁
-                      </label>
-                      <label className="event-details" style={{ display: 'block' }}>
-                        <input
-                          type="radio"
-                          name="participaRegalo"
-                          value="false"
-                          checked={participaRegaloSeleccion === 'false'}
-                          onChange={(e) => setParticipaRegaloSeleccion(e.target.value)}
-                        />{' '}
-                        Solo voy al cumpleaños, sin regalo
-                      </label>
-                    </div>
-                  )}
-
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -980,82 +988,120 @@ function DetalleEvento() {
                 </div>
               )}
 
-              {!esAdmin && miParticipacion && (
+              {!esAdmin && (
                 <div className="participacion-ok">
-                  <div className="event-name">Participacion confirmada</div>
-                  <div className="event-details">
-                    Nombre: {miParticipacion.nombre_participante || miParticipacion.alumnoNombre || nombreParticipante}
-                  </div>
-                  <div className="event-details">Estado: {miParticipacion.estado || 'pendiente'}</div>
-                  <div className="event-details">
-                    Tipo de participación: {miParticipacion.participa_regalo === false ? 'Solo cumpleaños' : 'Cumpleaños + regalo'}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    onClick={resetearParticipacionLocal}
-                  >
-                    Soy otro apoderado
-                  </button>
+                  <div className="event-name">{cumpleanerosTitulo}</div>
+                  <div className="event-details">Fecha: {formatFecha(fechaEvento)}</div>
 
-                  {miParticipacion.participa_regalo !== false ? (
+                  {!miParticipacion && esEventoAbierto && (
                     <>
-                      <div className="pago-datos-card">
-                        <div className="pago-datos-title">Datos de pago del coordinador</div>
-                        <div className="event-details">Banco: {evento.banco || 'No definido'}</div>
-                        <div className="event-details">
-                          Tipo de cuenta: {evento.tipo_cuenta || evento.tipoCuenta || 'No definido'}
+                      {!mostrarOpcionesInscripcion ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => setMostrarOpcionesInscripcion(true)}
+                        >
+                          Inscribirse
+                        </button>
+                      ) : (
+                        <div className="buttons-container" style={{ marginTop: '0.9rem', gap: '0.7rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={confirmandoParticipacion}
+                            onClick={() => confirmarParticipacion(true)}
+                          >
+                            {confirmandoParticipacion ? 'Confirmando...' : 'Regalo y cumpleaños 🎁'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={confirmandoParticipacion}
+                            onClick={() => confirmarParticipacion(false)}
+                          >
+                            {confirmandoParticipacion ? 'Confirmando...' : 'Solo cumpleaños 🎂'}
+                          </button>
                         </div>
-                        <div className="event-details">
-                          Numero de cuenta: {evento.numero_cuenta || evento.numeroCuenta || 'No definido'}
-                        </div>
-                        <div className="event-details">Email: {evento.email_pago || evento.email || 'No definido'}</div>
-                      </div>
+                      )}
+                    </>
+                  )}
 
-                      <div className="comprobante-box">
-                        <label htmlFor="comprobanteFile" className="participacion-label">
-                          Sube una imagen de tu comprobante
-                        </label>
-                        <input
-                          id="comprobanteFile"
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setComprobanteFile(e.target.files?.[0] || null)}
-                        />
+                  {!miParticipacion && !esEventoAbierto && (
+                    <div className="event-details" style={{ marginTop: '0.7rem' }}>
+                      Este cumpleaños no está disponible para nuevas inscripciones.
+                    </div>
+                  )}
+
+                  {miParticipacion && esEventoAbierto && (
+                    <div className="buttons-container" style={{ marginTop: '0.9rem', gap: '0.7rem' }}>
+                      {miParticipaRegalo ? (
                         <button
                           type="button"
                           className="btn btn-secondary"
-                          onClick={subirComprobante}
-                          disabled={subiendoComprobante}
+                          onClick={() => cambiarParticipacionRegalo(false)}
                         >
-                          {subiendoComprobante ? 'Subiendo...' : 'Subir comprobante'}
+                          Solo cumpleaños 🎂
                         </button>
-                        {(miParticipacion.imagen_comprobante || miParticipacion.comprobante_url) && (
-                          <a
-                            href={miParticipacion.imagen_comprobante || miParticipacion.comprobante_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="comprobante-link"
-                          >
-                            Ver comprobante subido
-                          </a>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div
-                      style={{
-                        marginTop: '0.65rem',
-                        background: '#fff3cd',
-                        border: '1px solid #ffe69c',
-                        borderRadius: '8px',
-                        padding: '0.65rem 0.8rem',
-                        color: '#664d03',
-                        fontSize: '0.9rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      Estás anotado para el cumpleaños 🎂 · No participas del regalo grupal
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => cambiarParticipacionRegalo(true)}
+                        >
+                          Unirse al regalo 🎁
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-rechazar"
+                        disabled={desinscribiendoId === miParticipacion.id}
+                        onClick={() => desinscribirParticipante(miParticipacion.id)}
+                      >
+                        {desinscribiendoId === miParticipacion.id ? 'Desinscribiendo...' : 'Desinscribirse'}
+                      </button>
+                    </div>
+                  )}
+
+                  {miParticipacion && esEventoEnPago && miParticipaRegalo && estadoMiParticipacion === 'pendiente' && (
+                    <div className="comprobante-box" style={{ marginTop: '0.85rem' }}>
+                      <input
+                        id="comprobanteFile"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setComprobanteFile(e.target.files?.[0] || null)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={subirComprobante}
+                        disabled={subiendoComprobante}
+                      >
+                        {subiendoComprobante ? 'Subiendo...' : 'Subir comprobante'}
+                      </button>
+                    </div>
+                  )}
+
+                  {miParticipacion && esEventoEnPago && miParticipaRegalo && estadoMiParticipacion === 'comprobante_subido' && (
+                    <div className="event-details" style={{ marginTop: '0.7rem', fontWeight: 700 }}>
+                      Esperando aprobación ⏳
+                    </div>
+                  )}
+
+                  {miParticipacion && esEventoEnPago && miParticipaRegalo && estadoMiParticipacion === 'pagado' && (
+                    <div className="event-details" style={{ marginTop: '0.7rem', fontWeight: 700 }}>
+                      Pagado ✓
+                    </div>
+                  )}
+
+                  {miParticipacion && esEventoEnPago && !miParticipaRegalo && (
+                    <div className="event-details" style={{ marginTop: '0.7rem', fontWeight: 700 }}>
+                      Anotado para el cumpleaños 🎂
+                    </div>
+                  )}
+
+                  {miParticipacion && esEventoCompletado && estadoMiParticipacion === 'pagado' && (
+                    <div className="event-details" style={{ marginTop: '0.7rem', fontWeight: 700 }}>
+                      Pagado ✓
                     </div>
                   )}
                 </div>

@@ -8,10 +8,14 @@ function MisEventos() {
   const navigate = useNavigate()
   const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
   const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
+  const alumnoApoderadoIdActivo = window.localStorage.getItem('alumno_apoderado_id_activo') || ''
   const [cursoNombreActivo, setCursoNombreActivo] = useState('Mi curso')
   const [eventos, setEventos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [accionLoadingEventoId, setAccionLoadingEventoId] = useState(null)
+  const [inscripcionAbiertaEventoId, setInscripcionAbiertaEventoId] = useState(null)
+  const [recargaEventos, setRecargaEventos] = useState(0)
 
   const normalizeCumpleaneros = (evento) => {
     if (Array.isArray(evento.cumpleaneros) && evento.cumpleaneros.length > 0) {
@@ -68,6 +72,83 @@ function MisEventos() {
     const montoNumero = Number(monto)
     if (!Number.isFinite(montoNumero)) return '-'
     return `$${montoNumero.toLocaleString('es-CL')}`
+  }
+
+  const normalizeEstadoParticipacion = (participacion) => {
+    if (!participacion) return 'no_inscrito'
+
+    const estados = [participacion.estado]
+      .filter((value) => value !== null && value !== undefined)
+      .map((value) => String(value).toLowerCase().trim())
+
+    if (estados.includes('comprobante_subido')) return 'comprobante_subido'
+    if (estados.includes('pagado') || estados.includes('paid') || estados.includes('true') || estados.includes('1')) return 'pagado'
+    if (estados.includes('pendiente') || estados.includes('pending') || estados.includes('false') || estados.includes('0')) return 'pendiente'
+
+    return estados[0] || 'pendiente'
+  }
+
+  const actualizarEventos = () => setRecargaEventos((prev) => prev + 1)
+
+  const inscribirEnEvento = async (eventoId, participaRegalo) => {
+    const alumnoId = parseInt(alumnoApoderadoIdActivo, 10)
+    if (!alumnoId) return
+
+    setAccionLoadingEventoId(eventoId)
+    const { error: insertError } = await supabase
+      .from('participantes')
+      .insert({
+        evento_id: eventoId,
+        alumno_id: alumnoId,
+        estado: 'pendiente',
+        participa_regalo: participaRegalo
+      })
+
+    setAccionLoadingEventoId(null)
+
+    if (insertError) {
+      console.error('Error inscribiendo participante:', insertError)
+      return
+    }
+
+    setInscripcionAbiertaEventoId(null)
+    actualizarEventos()
+  }
+
+  const cambiarParticipacionRegalo = async (eventoId, participanteId, participaRegalo) => {
+    setAccionLoadingEventoId(eventoId)
+
+    const { error: updateError } = await supabase
+      .from('participantes')
+      .update({ participa_regalo: participaRegalo })
+      .eq('id', participanteId)
+
+    setAccionLoadingEventoId(null)
+
+    if (updateError) {
+      console.error('Error actualizando participa_regalo:', updateError)
+      return
+    }
+
+    actualizarEventos()
+  }
+
+  const desinscribirseEvento = async (eventoId, participanteId) => {
+    setAccionLoadingEventoId(eventoId)
+
+    const { error: deleteError } = await supabase
+      .from('participantes')
+      .delete()
+      .eq('id', participanteId)
+
+    setAccionLoadingEventoId(null)
+
+    if (deleteError) {
+      console.error('Error desinscribiendo participante:', deleteError)
+      return
+    }
+
+    actualizarEventos()
   }
 
   useEffect(() => {
@@ -135,6 +216,7 @@ function MisEventos() {
       }
 
       const alumnoIdsCurso = new Set(alumnosCurso.map((row) => Number(row.id)))
+      const alumnoApoderadoIdNumero = alumnoApoderadoIdActivo ? parseInt(alumnoApoderadoIdActivo, 10) : null
 
       const { data: eventosData, error: eventosError } = await supabase
         .from('eventos')
@@ -149,8 +231,27 @@ function MisEventos() {
         return
       }
 
+      const eventosBase = eventosData || []
+      const miParticipacionPorEvento = {}
+      if (rolIngreso === 'apoderado' && alumnoApoderadoIdNumero && eventosBase.length > 0) {
+        const eventoIds = eventosBase.map((evento) => evento.id)
+        const { data: misParticipacionesData, error: misParticipacionesError } = await supabase
+          .from('participantes')
+          .select('id, evento_id, alumno_id, estado, imagen_comprobante, cuota, participa_regalo')
+          .eq('alumno_id', alumnoApoderadoIdNumero)
+          .in('evento_id', eventoIds)
+
+        if (misParticipacionesError) {
+          console.error('Error cargando participaciones del alumno seleccionado:', misParticipacionesError)
+        } else {
+          for (const row of misParticipacionesData || []) {
+            miParticipacionPorEvento[row.evento_id] = row
+          }
+        }
+      }
+
       const eventosConCumpleaneros = await Promise.all(
-        (eventosData || []).map(async (evento) => {
+        eventosBase.map(async (evento) => {
           const { data: cumpleanerosData, error: cumpleanerosError } = await supabase
             .from('cumpleaneros')
             .select('alumno_id, alumnos(nombre)')
@@ -168,6 +269,24 @@ function MisEventos() {
             .select('id', { count: 'exact', head: true })
             .eq('evento_id', evento.id)
             .eq('estado', 'pagado')
+
+          const estadoEventoNorm = String(evento.estado ?? '').toLowerCase()
+          let saldoPorCobrar = null
+          if (estadoEventoNorm === 'en_pago' || estadoEventoNorm === 'cerrado') {
+            const { data: pendientesData, error: pendientesError } = await supabase
+              .from('participantes')
+              .select('cuota')
+              .eq('evento_id', evento.id)
+              .eq('estado', 'pendiente')
+
+            if (pendientesError) {
+              console.error('Error cargando saldo por cobrar del evento:', pendientesError)
+            } else {
+              saldoPorCobrar = (pendientesData || []).reduce((acc, p) => acc + (Number(p.cuota) || 0), 0)
+            }
+          }
+
+          const miParticipacion = miParticipacionPorEvento[evento.id] || null
 
           if (cumpleanerosError) {
             console.error('Error cargando cumpleañeros del evento:', cumpleanerosError)
@@ -194,7 +313,9 @@ function MisEventos() {
             ...evento,
             cumpleaneros,
             cuotaDefinida,
-            participantesPagados: participantesPagadosCount || 0
+            participantesPagados: participantesPagadosCount || 0,
+            saldoPorCobrar,
+            miParticipacion
           }
         })
       )
@@ -237,7 +358,7 @@ function MisEventos() {
     }
 
     cargarEventos()
-  }, [cursoIdActivo, rolIngreso])
+  }, [cursoIdActivo, rolIngreso, alumnoApoderadoIdActivo, recargaEventos])
 
   const eventosOrdenados = useMemo(() => {
     return [...eventos].sort((a, b) => {
@@ -309,24 +430,147 @@ function MisEventos() {
               const cuotaMax = normalizeCuotaMax(evento)
               const cuotaDefinida = normalizeCuotaDefinida(evento)
               const estado = normalizeEstado(evento)
+              const estadoEvento = String(estado).toLowerCase()
               const esCompletado = String(estado).toLowerCase() === 'completado'
+              const miParticipacion = evento.miParticipacion || null
+              const participaRegalo = miParticipacion?.participa_regalo !== false
+              const estadoParticipacion = normalizeEstadoParticipacion(miParticipacion)
+              const accionLoading = accionLoadingEventoId === evento.id
+              const mostrarOpcionesInscripcion = inscripcionAbiertaEventoId === evento.id
+              const esApoderado = rolIngreso === 'apoderado'
 
               return (
                 <div key={evento.id} className="event-item">
                   <div className="event-name">{normalizeCumpleaneros(evento)}</div>
                   <div className="event-details">Fecha: {formatFecha(fecha)}</div>
-                  {esCompletado ? (
+                  {!esApoderado && esCompletado ? (
                     <>
                       <div className="event-details">Monto total del regalo: {formatMonedaClp(evento.monto_total)}</div>
                       <div className="event-details">Numero de participantes: {evento.participantesPagados ?? 0}</div>
                       <div className="event-details">Cuota por persona: {formatMonedaClp(cuotaDefinida)}</div>
                     </>
-                  ) : (
-                    <div className="event-details">
-                      Cuota: {cuotaDefinida ? `$${cuotaDefinida.toLocaleString('es-CL')}` : `${cuotaMin ?? '-'} - ${cuotaMax ?? '-'}`}
+                  ) : !esApoderado ? (
+                    <>
+                      <div className="event-details">
+                        Cuota: {cuotaDefinida ? `$${cuotaDefinida.toLocaleString('es-CL')}` : `${cuotaMin ?? '-'} - ${cuotaMax ?? '-'}`}
+                      </div>
+                      {evento.saldoPorCobrar !== null && (
+                        <div className="event-details" style={{ fontWeight: 600, color: evento.saldoPorCobrar === 0 ? '#2e7d32' : '#c0392b' }}>
+                          {evento.saldoPorCobrar === 0
+                            ? 'Sin saldo pendiente ✓'
+                            : `Saldo por cobrar: $${evento.saldoPorCobrar.toLocaleString('es-CL')}`}
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+
+                  {esApoderado && (
+                    <div style={{ marginTop: '0.8rem' }}>
+                      {miParticipacion && (
+                        <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: '0.5rem' }}>
+                          {participaRegalo ? '🎁 Participa del regalo grupal' : '🎂 Solo cumpleaños'}
+                          {estadoParticipacion === 'comprobante_subido' && ' · Comprobante enviado ⏳'}
+                          {estadoParticipacion === 'pagado' && ' · Pagado ✓'}
+                        </div>
+                      )}
+
+                      {(estadoEvento === 'abierto' || estadoEvento === 'activo') && (
+                        <>
+                          <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '0.35rem' }}>¿Qué quieres hacer?</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            {!miParticipacion ? (
+                              !mostrarOpcionesInscripcion ? (
+                                <button
+                                  className="btn btn-secondary"
+                                  type="button"
+                                  onClick={() => setInscripcionAbiertaEventoId(evento.id)}
+                                  disabled={accionLoading}
+                                  style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                                >
+                                  Inscribirse
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    onClick={() => inscribirEnEvento(evento.id, true)}
+                                    disabled={accionLoading}
+                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                                  >
+                                    {accionLoading ? 'Guardando...' : 'Regalo y cumpleaños 🎁'}
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    onClick={() => inscribirEnEvento(evento.id, false)}
+                                    disabled={accionLoading}
+                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                                  >
+                                    {accionLoading ? 'Guardando...' : 'Solo cumpleaños 🎂'}
+                                  </button>
+                                </>
+                              )
+                            ) : (
+                              <>
+                                {participaRegalo ? (
+                                  <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    onClick={() => cambiarParticipacionRegalo(evento.id, miParticipacion.id, false)}
+                                    disabled={accionLoading}
+                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                                  >
+                                    Solo cumpleaños 🎂
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    onClick={() => cambiarParticipacionRegalo(evento.id, miParticipacion.id, true)}
+                                    disabled={accionLoading}
+                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                                  >
+                                    Unirse al regalo 🎁
+                                  </button>
+                                )}
+                                <button
+                                  className="btn btn-secondary"
+                                  type="button"
+                                  onClick={() => desinscribirseEvento(evento.id, miParticipacion.id)}
+                                  disabled={accionLoading}
+                                  style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                                >
+                                  Desinscribirse
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'pendiente' && (
+                        <>
+                          <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '0.35rem' }}>¿Qué quieres hacer?</div>
+                          <button
+                            className="btn btn-secondary"
+                            type="button"
+                            onClick={() => navigate(`/evento/${evento.id}`)}
+                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                          >
+                            Subir comprobante
+                          </button>
+                        </>
+                      )}
+
+                      {estadoEvento === 'completado' && (
+                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#444' }}>Completado ✓</div>
+                      )}
                     </div>
                   )}
-                  <div className="event-details">Estado: {estado}</div>
+
+                  {!esApoderado && <div className="event-details">Estado: {estado}</div>}
+
                   <div style={{ marginTop: '0.75rem' }}>
                     <button
                       className="btn btn-secondary"
