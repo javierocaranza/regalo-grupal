@@ -27,6 +27,9 @@ function App() {
   const [generoAlumnoActivo, setGeneroAlumnoActivo] = useState(null)
   const [rolIngreso, setRolIngreso] = useState('')
   const [errorIngreso, setErrorIngreso] = useState('')
+  const [mostrarPinCoordinador, setMostrarPinCoordinador] = useState(false)
+  const [pinCoordinador, setPinCoordinador] = useState('')
+  const [validandoPinCoordinador, setValidandoPinCoordinador] = useState(false)
   const [modalPinCoordAbierto, setModalPinCoordAbierto] = useState(false)
   const [pinCoordActual, setPinCoordActual] = useState('')
   const [pinCoordNuevo, setPinCoordNuevo] = useState('')
@@ -72,10 +75,59 @@ function App() {
       return
     }
 
+    if (rol === 'coordinador') {
+      setErrorIngreso('')
+      setMostrarPinCoordinador(true)
+      return
+    }
+
     setErrorIngreso('')
+    setMostrarPinCoordinador(false)
+    setPinCoordinador('')
     window.localStorage.setItem('curso_id_activo', selectedCursoId)
     window.localStorage.setItem('rol_ingreso_activo', rol)
     setRolIngreso(rol)
+  }
+
+  const handleIngresarCoordinador = async () => {
+    if (!selectedCursoId) {
+      setErrorIngreso('Primero selecciona un curso para continuar.')
+      return
+    }
+
+    setErrorIngreso('')
+    setValidandoPinCoordinador(true)
+
+    const cursoIdNumero = parseInt(selectedCursoId, 10)
+    const { data, error } = await supabase
+      .from('cursos')
+      .select('pin_coordinador')
+      .eq('id', cursoIdNumero)
+      .single()
+
+    setValidandoPinCoordinador(false)
+
+    if (error) {
+      console.error('Error validando PIN de coordinador:', error)
+      setErrorIngreso('PIN incorrecto, inténtalo de nuevo')
+      return
+    }
+
+    const pinGuardado = data?.pin_coordinador === null || data?.pin_coordinador === undefined
+      ? ''
+      : String(data.pin_coordinador).trim()
+    const pinIngresado = String(pinCoordinador).trim()
+
+    if (!pinGuardado || pinIngresado !== pinGuardado) {
+      setErrorIngreso('PIN incorrecto, inténtalo de nuevo')
+      return
+    }
+
+    window.localStorage.setItem('curso_id_activo', selectedCursoId)
+    window.localStorage.setItem('rol_ingreso_activo', 'coordinador')
+    setRolIngreso('coordinador')
+    setMostrarPinCoordinador(false)
+    setPinCoordinador('')
   }
 
   const handleSelectAlumnoApoderado = (alumnoId) => {
@@ -471,6 +523,8 @@ function App() {
                   onChange={(e) => {
                     setSelectedCursoId(e.target.value)
                     setErrorIngreso('')
+                    setMostrarPinCoordinador(false)
+                    setPinCoordinador('')
                   }}
                 >
                   <option value="">Selecciona un curso</option>
@@ -492,6 +546,28 @@ function App() {
                 Soy coordinador
               </button>
             </div>
+
+            {mostrarPinCoordinador && (
+              <div style={{ marginTop: '0.85rem', display: 'grid', gap: '0.55rem' }}>
+                <input
+                  type="password"
+                  className="ingreso-select"
+                  placeholder="Ingresa PIN de coordinador"
+                  value={pinCoordinador}
+                  onChange={(e) => {
+                    setPinCoordinador(e.target.value)
+                    setErrorIngreso('')
+                  }}
+                />
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleIngresarCoordinador}
+                  disabled={validandoPinCoordinador || !pinCoordinador.trim()}
+                >
+                  {validandoPinCoordinador ? 'Validando...' : 'Ingresar'}
+                </button>
+              </div>
+            )}
 
             {errorIngreso && <p className="ingreso-error">{errorIngreso}</p>}
           </div>
