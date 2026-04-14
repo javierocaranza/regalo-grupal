@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
@@ -12,6 +12,7 @@ function CrearEvento() {
   const [selectedCumpleaneros, setSelectedCumpleaneros] = useState([])
   const [invitados, setInvitados] = useState('todos')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitGuardRef = useRef(false)
   const [otroBanco, setOtroBanco] = useState('')
   const [formData, setFormData] = useState({
     fecha: '',
@@ -88,7 +89,9 @@ function CrearEvento() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (isSubmitting) return
+    if (isSubmitting || submitGuardRef.current) return
+
+    submitGuardRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -129,6 +132,7 @@ function CrearEvento() {
       }
 
       const eventoId = data.id
+      console.log('evento_id usado al insertar cumpleañeros:', eventoId)
 
       const cumpleanerosData = selectedCumpleaneros.map(alumnoId => ({
         evento_id: eventoId,
@@ -150,6 +154,7 @@ function CrearEvento() {
       const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
       navigate(`/mis-eventos${adminParam}`)
     } finally {
+      submitGuardRef.current = false
       setIsSubmitting(false)
     }
   }
