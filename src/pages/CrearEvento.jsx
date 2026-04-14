@@ -12,6 +12,7 @@ function CrearEvento() {
   const [selectedCumpleaneros, setSelectedCumpleaneros] = useState([])
   const [invitados, setInvitados] = useState('todos')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [otroBanco, setOtroBanco] = useState('')
   const [formData, setFormData] = useState({
     fecha: '',
     cuotaMinima: '10000',
@@ -62,6 +63,11 @@ function CrearEvento() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
+
+    if (name === 'coordinadorBanco' && value !== 'Otro') {
+      setOtroBanco('')
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -91,6 +97,10 @@ function CrearEvento() {
         return
       }
 
+      const bancoSeleccionado = formData.coordinadorBanco === 'Otro'
+        ? otroBanco.trim()
+        : formData.coordinadorBanco
+
       const eventoData = {
         fecha_evento: formData.fecha,
         cuota_minima: parseFloat(formData.cuotaMinima),
@@ -99,7 +109,7 @@ function CrearEvento() {
         curso_id: cursoIdActivo ? parseInt(cursoIdActivo, 10) : null,
         nombre_coordinador: formData.coordinadorNombre,
         rut_coordinador: formData.coordinadorRut,
-        banco: formData.coordinadorBanco,
+        banco: bancoSeleccionado,
         tipo_cuenta: formData.coordinadorTipoCuenta,
         numero_cuenta: formData.coordinadorNumeroCuenta,
         email_pago: formData.coordinadorEmail,
@@ -321,6 +331,17 @@ function CrearEvento() {
               <option value="Falabella">Banco Falabella</option>
               <option value="Otro">Otro</option>
             </select>
+
+            {formData.coordinadorBanco === 'Otro' && (
+              <input
+                type="text"
+                value={otroBanco}
+                onChange={(e) => setOtroBanco(e.target.value)}
+                placeholder="Escribe el nombre del banco"
+                required
+                style={{ marginTop: '8px' }}
+              />
+            )}
           </div>
 
           <div className="form-group">
