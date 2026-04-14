@@ -76,13 +76,19 @@ function MiCurso() {
   }
 
   const parsearFecha = (texto) => {
-    if (!texto) return null
+    const fechaOriginal = texto
+    const logAndReturn = (resultado) => {
+      console.log('fecha original:', fechaOriginal, '-> convertida:', resultado)
+      return resultado
+    }
+
+    if (!texto) return logAndReturn(null)
 
     const raw = String(texto).trim()
-    if (!raw) return null
+    if (!raw) return logAndReturn(null)
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return raw
+      return logAndReturn(raw)
     }
 
     const normalized = raw
@@ -96,32 +102,32 @@ function MiCurso() {
     let match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
     if (match) {
       const [, dd, mm, yyyy] = match
-      return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+      return logAndReturn(`${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`)
     }
 
     match = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
     if (match) {
       const [, dd, mm, yyyy] = match
-      return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+      return logAndReturn(`${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`)
     }
 
-    match = normalized.match(/^(\d{1,2})-([a-z]+)-(\d{4})$/)
+    match = normalized.match(/^(\d{1,2})-([a-z]{3})-(\d{4})$/)
     if (match) {
       const [, dd, mesTxt, yyyy] = match
       const mm = months[mesTxt]
-      if (!mm) return null
-      return `${yyyy}-${mm}-${String(dd).padStart(2, '0')}`
+      if (!mm) return logAndReturn(null)
+      return logAndReturn(`${yyyy}-${mm}-${String(dd).padStart(2, '0')}`)
     }
 
     match = normalized.match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/)
     if (match) {
       const [, dd, mesTxt, yyyy] = match
       const mm = months[mesTxt]
-      if (!mm) return null
-      return `${yyyy}-${mm}-${String(dd).padStart(2, '0')}`
+      if (!mm) return logAndReturn(null)
+      return logAndReturn(`${yyyy}-${mm}-${String(dd).padStart(2, '0')}`)
     }
 
-    return null
+    return logAndReturn(null)
   }
 
   const cargarAlumnos = async (cursoId) => {
