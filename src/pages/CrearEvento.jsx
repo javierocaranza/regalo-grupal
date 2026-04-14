@@ -76,13 +76,19 @@ function CrearEvento() {
   }
 
   const handleCumpleaneroChange = (alumnoId) => {
-    console.log(`Toggle alumnoId: ${alumnoId} (${typeof alumnoId})`)
-    setSelectedCumpleaneros(prev => {
-      if (prev.includes(alumnoId)) {
-        return prev.filter(id => id !== alumnoId)
-      } else {
-        return [...prev, alumnoId]
+    const alumnoIdNormalizado = Number(alumnoId)
+    console.log(`Toggle alumnoId: ${alumnoIdNormalizado} (${typeof alumnoIdNormalizado})`)
+
+    setSelectedCumpleaneros((prev) => {
+      const prevNormalizado = prev
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id))
+
+      if (prevNormalizado.includes(alumnoIdNormalizado)) {
+        return prevNormalizado.filter((id) => id !== alumnoIdNormalizado)
       }
+
+      return [...prevNormalizado, alumnoIdNormalizado]
     })
   }
 
@@ -134,12 +140,18 @@ function CrearEvento() {
       const eventoId = data.id
       console.log('evento_id usado al insertar cumpleañeros:', eventoId)
 
-      const cumpleanerosData = selectedCumpleaneros.map(alumnoId => ({
+      const alumnoIdsUnicos = [...new Set(
+        selectedCumpleaneros
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id))
+      )]
+
+      const cumpleanerosData = alumnoIdsUnicos.map(alumnoId => ({
         evento_id: eventoId,
         alumno_id: alumnoId,
       }))
 
-      console.log('cumpleaneros a insertar:', cumpleanerosData)
+      console.log('array exacto a insertar en cumpleaneros:', cumpleanerosData)
       const { error: cumpleanerosError } = await supabase
         .from('cumpleaneros')
         .insert(cumpleanerosData)

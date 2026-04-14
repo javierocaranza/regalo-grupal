@@ -19,7 +19,13 @@ function PageTopBar() {
       navigate(-1)
       return
     }
-    navigate('/', { replace: true })
+
+    const params = new URLSearchParams()
+    if (cursoId) params.set('cursoId', cursoId)
+    if (rol) params.set('rol', rol)
+
+    const target = params.toString() ? `/?${params.toString()}` : '/'
+    navigate(target, { replace: true })
   }
 
   const handleGoHome = () => {
