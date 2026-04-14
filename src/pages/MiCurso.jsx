@@ -49,50 +49,79 @@ function MiCurso() {
   }
 
   const months = {
-    'enero': '01',
-    'febrero': '02',
-    'marzo': '03',
-    'abril': '04',
-    'mayo': '05',
-    'junio': '06',
-    'julio': '07',
-    'agosto': '08',
-    'septiembre': '09',
-    'octubre': '10',
-    'noviembre': '11',
-    'diciembre': '12'
+    ene: '01',
+    enero: '01',
+    feb: '02',
+    febrero: '02',
+    mar: '03',
+    marzo: '03',
+    abr: '04',
+    abril: '04',
+    may: '05',
+    mayo: '05',
+    jun: '06',
+    junio: '06',
+    jul: '07',
+    julio: '07',
+    ago: '08',
+    agosto: '08',
+    sep: '09',
+    septiembre: '09',
+    oct: '10',
+    octubre: '10',
+    nov: '11',
+    noviembre: '11',
+    dic: '12',
+    diciembre: '12'
   }
 
-  const convertDateSpanishToISO = (dateStr) => {
-    const fechaOriginal = dateStr
-    const logAndReturn = (resultado) => {
-      console.log('fecha original:', fechaOriginal, '-> convertida:', resultado)
-      return resultado
+  const parsearFecha = (texto) => {
+    if (!texto) return null
+
+    const raw = String(texto).trim()
+    if (!raw) return null
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return raw
     }
-
-    if (!dateStr) return logAndReturn(null)
-
-    const raw = String(dateStr).trim()
-    if (!raw) return logAndReturn(null)
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return logAndReturn(raw)
 
     const normalized = raw
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
+      .replace(/,/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
 
-    const parts = normalized.split(/\s+/)
-    if (parts.length !== 2) return logAndReturn(null)
+    let match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (match) {
+      const [, dd, mm, yyyy] = match
+      return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+    }
 
-    const dayNum = parseInt(parts[0], 10)
-    if (!dayNum || dayNum < 1 || dayNum > 31) return logAndReturn(null)
+    match = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+    if (match) {
+      const [, dd, mm, yyyy] = match
+      return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+    }
 
-    const month = months[parts[1]]
-    if (!month) return logAndReturn(null)
+    match = normalized.match(/^(\d{1,2})-([a-z]+)-(\d{4})$/)
+    if (match) {
+      const [, dd, mesTxt, yyyy] = match
+      const mm = months[mesTxt]
+      if (!mm) return null
+      return `${yyyy}-${mm}-${String(dd).padStart(2, '0')}`
+    }
 
-    const year = 2026
-    return logAndReturn(`${year}-${month}-${String(dayNum).padStart(2, '0')}`)
+    match = normalized.match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/)
+    if (match) {
+      const [, dd, mesTxt, yyyy] = match
+      const mm = months[mesTxt]
+      if (!mm) return null
+      return `${yyyy}-${mm}-${String(dd).padStart(2, '0')}`
+    }
+
+    return null
   }
 
   const cargarAlumnos = async (cursoId) => {
@@ -131,7 +160,7 @@ function MiCurso() {
     'susana','cristina','marcela','fabiola','iris','esperanza','luz','mercedes','gladys',
     'silvia','nadia','raquel','rebeca','eva','alba','paloma','mariana','jimena','cynthia',
     'denisse','priscilla','giselle','evelyn','jacqueline','yasmine','ariadna','camille',
-    'elsa','hannah','emma','mia','luna','abril','agustina','micaela','juanita','dolores',
+    'elsa','hannah','emma','ava','sophia','mia','luna','abril','agustina','micaela','juanita','dolores',
     'graciela','hortensia','irene','leonor','lidia','lourdes','marta','milagros','nieves',
     'noelia','nora','olga','pia','rosario','salome','sandra','sonia','tania','tina',
     'ursula','yolanda','zoe','araceli','celeste','consuelo','dafne','delia','diana',
@@ -156,12 +185,17 @@ function MiCurso() {
 
   const inferirGenero = (nombre) => {
     if (!nombre) return null
-    const primerNombre = String(nombre)
+
+    const partes = String(nombre)
       .trim()
-      .split(/\s+/)[0]
+      .split(/\s+/)
+      .filter(Boolean)
+
+    const primerNombre = (partes[2] || '')
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
+
     if (!primerNombre) return null
     return NOMBRES_NINA.has(primerNombre) ? 'niña' : 'niño'
   }
@@ -485,7 +519,7 @@ function MiCurso() {
 
         return {
           nombre,
-          fechaCumple: convertDateSpanishToISO(fechaCumple),
+          fechaCumple: parsearFecha(fechaCumple),
           nombrePadre,
           telefonoPadre: `${padreTel.code} ${padreTel.number}`,
           emailPadre,
