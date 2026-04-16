@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabase.js'
+import { supabase, getCursoToken } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -26,6 +26,25 @@ function CrearEvento() {
     coordinadorNumeroCuenta: '',
     coordinadorEmail: '',
   })
+
+  useEffect(() => {
+    const verificarToken = async () => {
+      const tokenLocal = getCursoToken()
+      if (!tokenLocal || !cursoIdActivo) {
+        navigate('/')
+        return
+      }
+      const { data, error } = await supabase
+        .from('cursos')
+        .select('token')
+        .eq('id', cursoIdActivo)
+        .single()
+      if (error || !data || data.token !== tokenLocal) {
+        navigate('/')
+      }
+    }
+    verificarToken()
+  }, [])
 
   useEffect(() => {
     const cargarAlumnos = async () => {

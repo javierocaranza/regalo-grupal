@@ -89,6 +89,8 @@ function App() {
     setPinCoordinador('')
     window.localStorage.setItem('curso_id_activo', selectedCursoId)
     window.localStorage.setItem('rol_ingreso_activo', rol)
+    const cursoActualApoderado = cursos.find((c) => String(c.id) === String(selectedCursoId))
+    if (cursoActualApoderado?.token) window.localStorage.setItem('cursoToken', cursoActualApoderado.token)
     setRolIngreso(rol)
   }
 
@@ -128,6 +130,8 @@ function App() {
 
     window.localStorage.setItem('curso_id_activo', selectedCursoId)
     window.localStorage.setItem('rol_ingreso_activo', 'coordinador')
+    const cursoActualCoord = cursos.find((c) => String(c.id) === String(selectedCursoId))
+    if (cursoActualCoord?.token) window.localStorage.setItem('cursoToken', cursoActualCoord.token)
     setRolIngreso('coordinador')
     setMostrarPinCoordinador(false)
     setPinCoordinador('')
@@ -702,9 +706,9 @@ function App() {
           </>
         )}
 
-        {loadingUpcoming && <p>Cargando próximos cumpleaños...</p>}
+        {rolIngreso && loadingUpcoming && <p>Cargando próximos cumpleaños...</p>}
 
-        {!loadingUpcoming && upcomingEvents.length > 0 && (
+        {rolIngreso && !loadingUpcoming && upcomingEvents.length > 0 && (
           <div className="upcoming-events">
             <h3 className="upcoming-title">Próximos cumpleaños</h3>
             <div className="events-list">

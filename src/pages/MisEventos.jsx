@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabase.js'
+import { supabase, getCursoToken } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -150,6 +150,25 @@ function MisEventos() {
 
     actualizarEventos()
   }
+
+  useEffect(() => {
+    const verificarToken = async () => {
+      const tokenLocal = getCursoToken()
+      if (!tokenLocal || !cursoIdActivo) {
+        navigate('/')
+        return
+      }
+      const { data, error } = await supabase
+        .from('cursos')
+        .select('token')
+        .eq('id', cursoIdActivo)
+        .single()
+      if (error || !data || data.token !== tokenLocal) {
+        navigate('/')
+      }
+    }
+    verificarToken()
+  }, [])
 
   useEffect(() => {
     const cargarCursoActivo = async () => {
@@ -552,6 +571,15 @@ function MisEventos() {
                       {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'pendiente' && (
                         <>
                           <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '0.35rem' }}>¿Qué quieres hacer?</div>
+                          <div style={{ fontSize: '0.82rem', marginBottom: '0.6rem', background: '#f5f5f5', borderRadius: '6px', padding: '0.6rem 0.8rem' }}>
+                            <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>Cuota a pagar: {formatMonedaClp(miParticipacion.cuota)}</div>
+                            <div style={{ fontWeight: 600, marginTop: '0.4rem', marginBottom: '0.2rem' }}>Datos para transferir:</div>
+                            {evento.nombre_coordinador && <div>Nombre: {evento.nombre_coordinador}</div>}
+                            {evento.banco && <div>Banco: {evento.banco}</div>}
+                            {evento.tipo_cuenta && <div>Tipo de cuenta: {evento.tipo_cuenta}</div>}
+                            {evento.numero_cuenta && <div>N° cuenta: {evento.numero_cuenta}</div>}
+                            {evento.email_pago && <div>Email: {evento.email_pago}</div>}
+                          </div>
                           <button
                             className="btn btn-secondary"
                             type="button"

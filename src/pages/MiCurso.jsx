@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
-import { supabase } from '../supabase.js'
+import { supabase, getCursoToken } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -278,6 +278,25 @@ function MiCurso() {
     const normalizedName = (student.nombre || '').trim().toLowerCase()
     return list.some(a => (a.nombre || '').trim().toLowerCase() === normalizedName)
   }
+
+  useEffect(() => {
+    const verificarToken = async () => {
+      const tokenLocal = getCursoToken()
+      if (!tokenLocal || !cursoIdActivo) {
+        navigate('/')
+        return
+      }
+      const { data, error } = await supabase
+        .from('cursos')
+        .select('token')
+        .eq('id', cursoIdActivo)
+        .single()
+      if (error || !data || data.token !== tokenLocal) {
+        navigate('/')
+      }
+    }
+    verificarToken()
+  }, [])
 
   // Cargar alumnos desde Supabase al montar el componente
   useEffect(() => {
