@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
-import { supabase, getCursoToken } from '../supabase.js'
+import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function MiCurso() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { token } = useParams()
   const searchParams = new URLSearchParams(location.search)
   const esNuevoCurso = searchParams.get('nuevo') === 'true'
   const cursoIdParam = searchParams.get('cursoId') || window.localStorage.getItem('curso_id_activo')
@@ -280,18 +281,15 @@ function MiCurso() {
   }
 
   useEffect(() => {
+    if (!token) return // new course flow (/mi-curso), no token
     const verificarToken = async () => {
-      const tokenLocal = getCursoToken()
-      if (!tokenLocal || !cursoIdActivo) {
-        navigate('/')
-        return
-      }
+      if (!cursoIdActivo) { navigate('/'); return; }
       const { data, error } = await supabase
         .from('cursos')
         .select('token')
         .eq('id', cursoIdActivo)
         .single()
-      if (error || !data || data.token !== tokenLocal) {
+      if (error || !data || data.token !== token) {
         navigate('/')
       }
     }

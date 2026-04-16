@@ -36,7 +36,7 @@ function Admin() {
 
       const { data, error: cursosError } = await supabase
         .from('cursos')
-        .select('id, nombre, anio, colegio, pin_coordinador')
+        .select('id, nombre, anio, colegio, pin_coordinador, token')
         .order('anio', { ascending: false })
 
       if (cursosError) {
@@ -263,6 +263,21 @@ function Admin() {
                     <div className="event-details">Año: {curso.anio || '-'}</div>
                     <div className="event-details">Colegio: {curso.colegio || '-'}</div>
                     <div className="event-details">PIN coordinador: {curso.pin_coordinador || '-'}</div>
+                    {curso.token && (
+                      <div className="event-details" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span style={{ wordBreak: 'break-all' }}>
+                          Link: {window.location.origin}/{curso.token}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => navigator.clipboard.writeText(`${window.location.origin}/${curso.token}`)}
+                          style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }}
+                        >
+                          Copiar link
+                        </button>
+                      </div>
+                    )}
                     <div style={{ marginTop: '0.4rem' }}>
                       <button
                         type="button"

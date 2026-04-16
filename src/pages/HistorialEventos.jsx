@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { supabase, getCursoToken } from '../supabase.js'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function HistorialEventos() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { token } = useParams()
   const cursoId = location.state?.cursoId || window.localStorage.getItem('curso_id_activo') || ''
   const cursoNombreState = location.state?.cursoNombre || ''
   const [cursoNombre, setCursoNombre] = useState(cursoNombreState || 'Mi curso')
@@ -52,8 +53,7 @@ function HistorialEventos() {
 
   useEffect(() => {
     const verificarToken = async () => {
-      const tokenLocal = getCursoToken()
-      if (!tokenLocal || !cursoId) {
+      if (!token || !cursoId) {
         navigate('/')
         return
       }
@@ -62,7 +62,7 @@ function HistorialEventos() {
         .select('token')
         .eq('id', cursoId)
         .single()
-      if (error || !data || data.token !== tokenLocal) {
+      if (error || !data || data.token !== token) {
         navigate('/')
       }
     }

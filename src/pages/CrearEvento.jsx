@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase, getCursoToken } from '../supabase.js'
+import { useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function CrearEvento() {
   const navigate = useNavigate()
+  const { token } = useParams()
   const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
   const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const [alumnos, setAlumnos] = useState([])
@@ -29,8 +30,7 @@ function CrearEvento() {
 
   useEffect(() => {
     const verificarToken = async () => {
-      const tokenLocal = getCursoToken()
-      if (!tokenLocal || !cursoIdActivo) {
+      if (!token || !cursoIdActivo) {
         navigate('/')
         return
       }
@@ -39,7 +39,7 @@ function CrearEvento() {
         .select('token')
         .eq('id', cursoIdActivo)
         .single()
-      if (error || !data || data.token !== tokenLocal) {
+      if (error || !data || data.token !== token) {
         navigate('/')
       }
     }
@@ -183,7 +183,7 @@ function CrearEvento() {
 
       alert('¡Cumpleaños creado exitosamente!')
       const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
-      navigate(`/mis-eventos${adminParam}`)
+      navigate(`/${token}/mis-eventos${adminParam}`)
     } finally {
       submitGuardRef.current = false
       setIsSubmitting(false)

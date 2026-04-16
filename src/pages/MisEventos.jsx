@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase, getCursoToken } from '../supabase.js'
+import { useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function MisEventos() {
   const navigate = useNavigate()
+  const { token } = useParams()
   const rolIngreso = window.localStorage.getItem('rol_ingreso_activo') || ''
   const cursoIdActivo = window.localStorage.getItem('curso_id_activo') || ''
   const alumnoApoderadoIdActivo = window.localStorage.getItem('alumno_apoderado_id_activo') || ''
@@ -153,8 +154,7 @@ function MisEventos() {
 
   useEffect(() => {
     const verificarToken = async () => {
-      const tokenLocal = getCursoToken()
-      if (!tokenLocal || !cursoIdActivo) {
+      if (!token || !cursoIdActivo) {
         navigate('/')
         return
       }
@@ -163,7 +163,7 @@ function MisEventos() {
         .select('token')
         .eq('id', cursoIdActivo)
         .single()
-      if (error || !data || data.token !== tokenLocal) {
+      if (error || !data || data.token !== token) {
         navigate('/')
       }
     }
@@ -403,7 +403,7 @@ function MisEventos() {
           type="button"
           className="btn btn-secondary"
           onClick={() => {
-            navigate('/historial-eventos', {
+            navigate(`/${token}/historial-eventos`, {
               state: {
                 cursoId: cursoIdActivo,
                 cursoNombre: cursoNombreActivo
@@ -583,7 +583,7 @@ function MisEventos() {
                           <button
                             className="btn btn-secondary"
                             type="button"
-                            onClick={() => navigate(`/evento/${evento.id}`)}
+                            onClick={() => navigate(`/${token}/evento/${evento.id}`)}
                             style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
                           >
                             Subir comprobante
@@ -604,7 +604,7 @@ function MisEventos() {
                       className="btn btn-secondary"
                       onClick={() => {
                         const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
-                        navigate(`/evento/${evento.id}${adminParam}`)
+                        navigate(`/${token}/evento/${evento.id}${adminParam}`)
                       }}
                       style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
                     >

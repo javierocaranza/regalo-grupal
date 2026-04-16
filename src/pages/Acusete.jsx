@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { supabase, getCursoToken } from '../supabase.js'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
+import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function Acusete() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { token } = useParams()
   const cursoId = location.state?.cursoId || localStorage.getItem('curso_id_activo')
   const [cursoNombre, setCursoNombre] = useState('Mi curso')
   const [vista, setVista] = useState('alumno')
@@ -179,8 +180,7 @@ function Acusete() {
 
   useEffect(() => {
     const verificarToken = async () => {
-      const tokenLocal = getCursoToken()
-      if (!tokenLocal || !cursoId) {
+      if (!token || !cursoId) {
         navigate('/')
         return
       }
@@ -189,7 +189,7 @@ function Acusete() {
         .select('token')
         .eq('id', cursoId)
         .single()
-      if (error || !data || data.token !== tokenLocal) {
+      if (error || !data || data.token !== token) {
         navigate('/')
       }
     }

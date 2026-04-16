@@ -1,12 +1,12 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { supabase, getCursoToken } from '../supabase.js'
+import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
 function DetalleEvento() {
   const navigate = useNavigate()
-  const { id } = useParams()
+  const { token, id } = useParams()
   const location = useLocation()
   const esAdmin = new URLSearchParams(location.search).get('admin') === 'true'
   const OTRO_INVITADO_VALUE = 'otro_externo'
@@ -123,8 +123,7 @@ function DetalleEvento() {
   useEffect(() => {
     if (esAdmin) return
     const verificarToken = async () => {
-      const tokenLocal = getCursoToken()
-      if (!tokenLocal || !cursoIdActivo) {
+      if (!token || !cursoIdActivo) {
         navigate('/')
         return
       }
@@ -133,7 +132,7 @@ function DetalleEvento() {
         .select('token')
         .eq('id', cursoIdActivo)
         .single()
-      if (error || !data || data.token !== tokenLocal) {
+      if (error || !data || data.token !== token) {
         navigate('/')
       }
     }
