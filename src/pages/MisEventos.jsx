@@ -458,17 +458,154 @@ function MisEventos() {
               const mostrarOpcionesInscripcion = inscripcionAbiertaEventoId === evento.id
               const esApoderado = rolIngreso === 'apoderado'
 
-              return (
+              return esApoderado ? (
+                <div key={evento.id} style={{ padding: '0.55rem 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    {/* Izquierda: info */}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.1rem' }}>
+                        {normalizeCumpleaneros(evento)}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#888' }}>{formatFecha(fecha)}</div>
+                      {miParticipacion && (
+                        <div style={{ fontSize: '0.75rem', color: '#555', marginTop: '0.1rem' }}>
+                          {participaRegalo ? '🎁 Regalo + cumple' : '🎂 Solo cumple'}
+                          {estadoParticipacion === 'comprobante_subido' && ' · ⏳ Enviado'}
+                          {estadoParticipacion === 'pagado' && ' · ✓ Pagado'}
+                        </div>
+                      )}
+                    </div>
+                    {/* Derecha: acciones */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem', flexShrink: 0 }}>
+                      {(estadoEvento === 'abierto' || estadoEvento === 'activo') && (
+                        <>
+                          {!miParticipacion ? (
+                            !mostrarOpcionesInscripcion ? (
+                              <button
+                                className="btn btn-secondary"
+                                type="button"
+                                onClick={() => setInscripcionAbiertaEventoId(evento.id)}
+                                disabled={accionLoading}
+                                style={{ padding: '0.25rem 0.65rem', fontSize: '0.78rem' }}
+                              >
+                                Inscribirse
+                              </button>
+                            ) : (
+                              <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                <button
+                                  className="btn btn-secondary"
+                                  type="button"
+                                  onClick={() => inscribirEnEvento(evento.id, true)}
+                                  disabled={accionLoading}
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                >
+                                  {accionLoading ? '...' : '🎁 Reg.+Cumple'}
+                                </button>
+                                <button
+                                  className="btn btn-secondary"
+                                  type="button"
+                                  onClick={() => inscribirEnEvento(evento.id, false)}
+                                  disabled={accionLoading}
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                >
+                                  {accionLoading ? '...' : '🎂 Solo cumple'}
+                                </button>
+                              </div>
+                            )
+                          ) : (
+                            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              {participaRegalo ? (
+                                <button
+                                  className="btn btn-secondary"
+                                  type="button"
+                                  onClick={() => cambiarParticipacionRegalo(evento.id, miParticipacion.id, false)}
+                                  disabled={accionLoading}
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                >
+                                  {accionLoading ? '...' : 'Solo 🎂'}
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-secondary"
+                                  type="button"
+                                  onClick={() => cambiarParticipacionRegalo(evento.id, miParticipacion.id, true)}
+                                  disabled={accionLoading}
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                >
+                                  {accionLoading ? '...' : 'Unirse 🎁'}
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-secondary"
+                                type="button"
+                                onClick={() => desinscribirseEvento(evento.id, miParticipacion.id)}
+                                disabled={accionLoading}
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                              >
+                                {accionLoading ? '...' : 'Salir'}
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'pendiente' && (
+                        <button
+                          className="btn btn-secondary"
+                          type="button"
+                          onClick={() => navigate(`/${token}/evento/${evento.id}`)}
+                          style={{ padding: '0.25rem 0.65rem', fontSize: '0.78rem' }}
+                        >
+                          Subir comprobante
+                        </button>
+                      )}
+
+                      {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'comprobante_subido' && (
+                        <span style={{ fontSize: '0.78rem', color: '#888' }}>Enviado ⏳</span>
+                      )}
+
+                      {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'pagado' && (
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#2e7d32' }}>Pagado ✓</span>
+                      )}
+
+                      {estadoEvento === 'completado' && (
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#444' }}>Completado ✓</span>
+                      )}
+
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => navigate(`/${token}/evento/${evento.id}`)}
+                        style={{ padding: '0.2rem 0.55rem', fontSize: '0.73rem' }}
+                      >
+                        Ver detalle
+                      </button>
+                    </div>
+                  </div>
+
+                  {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'pendiente' &&
+                    (evento.nombre_coordinador || evento.banco || evento.numero_cuenta || evento.email_pago) && (
+                    <div style={{ marginTop: '0.45rem', fontSize: '0.78rem', background: '#f9f9f9', borderRadius: '6px', padding: '0.45rem 0.7rem', color: '#555' }}>
+                      <div style={{ fontWeight: 600, marginBottom: '0.15rem' }}>Cuota: {formatMonedaClp(miParticipacion.cuota)}</div>
+                      {evento.nombre_coordinador && <div>Nombre: {evento.nombre_coordinador}</div>}
+                      {evento.banco && <div>Banco: {evento.banco}</div>}
+                      {evento.tipo_cuenta && <div>Tipo: {evento.tipo_cuenta}</div>}
+                      {evento.numero_cuenta && <div>N° cta: {evento.numero_cuenta}</div>}
+                      {evento.email_pago && <div>Email: {evento.email_pago}</div>}
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div key={evento.id} className="event-item">
                   <div className="event-name">{normalizeCumpleaneros(evento)}</div>
                   <div className="event-details">Fecha: {formatFecha(fecha)}</div>
-                  {!esApoderado && esCompletado ? (
+                  {esCompletado ? (
                     <>
                       <div className="event-details">Monto total del regalo: {formatMonedaClp(evento.monto_total)}</div>
                       <div className="event-details">Numero de participantes: {evento.participantesPagados ?? 0}</div>
                       <div className="event-details">Cuota por persona: {formatMonedaClp(cuotaDefinida)}</div>
                     </>
-                  ) : !esApoderado ? (
+                  ) : (
                     <>
                       <div className="event-details">
                         Cuota: {cuotaDefinida ? `$${cuotaDefinida.toLocaleString('es-CL')}` : `${cuotaMin ?? '-'} - ${cuotaMax ?? '-'}`}
@@ -481,123 +618,9 @@ function MisEventos() {
                         </div>
                       )}
                     </>
-                  ) : null}
-
-                  {esApoderado && (
-                    <div style={{ marginTop: '0.8rem' }}>
-                      {miParticipacion && (
-                        <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: '0.5rem' }}>
-                          {participaRegalo ? '🎁 Participa del regalo grupal' : '🎂 Solo cumpleaños'}
-                          {estadoParticipacion === 'comprobante_subido' && ' · Comprobante enviado ⏳'}
-                          {estadoParticipacion === 'pagado' && ' · Pagado ✓'}
-                        </div>
-                      )}
-
-                      {(estadoEvento === 'abierto' || estadoEvento === 'activo') && (
-                        <>
-                          <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '0.35rem' }}>¿Qué quieres hacer?</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                            {!miParticipacion ? (
-                              !mostrarOpcionesInscripcion ? (
-                                <button
-                                  className="btn btn-secondary"
-                                  type="button"
-                                  onClick={() => setInscripcionAbiertaEventoId(evento.id)}
-                                  disabled={accionLoading}
-                                  style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                                >
-                                  Inscribirse
-                                </button>
-                              ) : (
-                                <>
-                                  <button
-                                    className="btn btn-secondary"
-                                    type="button"
-                                    onClick={() => inscribirEnEvento(evento.id, true)}
-                                    disabled={accionLoading}
-                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                                  >
-                                    {accionLoading ? 'Guardando...' : 'Regalo y cumpleaños 🎁'}
-                                  </button>
-                                  <button
-                                    className="btn btn-secondary"
-                                    type="button"
-                                    onClick={() => inscribirEnEvento(evento.id, false)}
-                                    disabled={accionLoading}
-                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                                  >
-                                    {accionLoading ? 'Guardando...' : 'Solo cumpleaños 🎂'}
-                                  </button>
-                                </>
-                              )
-                            ) : (
-                              <>
-                                {participaRegalo ? (
-                                  <button
-                                    className="btn btn-secondary"
-                                    type="button"
-                                    onClick={() => cambiarParticipacionRegalo(evento.id, miParticipacion.id, false)}
-                                    disabled={accionLoading}
-                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                                  >
-                                    Solo cumpleaños 🎂
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="btn btn-secondary"
-                                    type="button"
-                                    onClick={() => cambiarParticipacionRegalo(evento.id, miParticipacion.id, true)}
-                                    disabled={accionLoading}
-                                    style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                                  >
-                                    Unirse al regalo 🎁
-                                  </button>
-                                )}
-                                <button
-                                  className="btn btn-secondary"
-                                  type="button"
-                                  onClick={() => desinscribirseEvento(evento.id, miParticipacion.id)}
-                                  disabled={accionLoading}
-                                  style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                                >
-                                  Desinscribirse
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </>
-                      )}
-
-                      {estadoEvento === 'en_pago' && miParticipacion && participaRegalo && estadoParticipacion === 'pendiente' && (
-                        <>
-                          <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '0.35rem' }}>¿Qué quieres hacer?</div>
-                          <div style={{ fontSize: '0.82rem', marginBottom: '0.6rem', background: '#f5f5f5', borderRadius: '6px', padding: '0.6rem 0.8rem' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>Cuota a pagar: {formatMonedaClp(miParticipacion.cuota)}</div>
-                            <div style={{ fontWeight: 600, marginTop: '0.4rem', marginBottom: '0.2rem' }}>Datos para transferir:</div>
-                            {evento.nombre_coordinador && <div>Nombre: {evento.nombre_coordinador}</div>}
-                            {evento.banco && <div>Banco: {evento.banco}</div>}
-                            {evento.tipo_cuenta && <div>Tipo de cuenta: {evento.tipo_cuenta}</div>}
-                            {evento.numero_cuenta && <div>N° cuenta: {evento.numero_cuenta}</div>}
-                            {evento.email_pago && <div>Email: {evento.email_pago}</div>}
-                          </div>
-                          <button
-                            className="btn btn-secondary"
-                            type="button"
-                            onClick={() => navigate(`/${token}/evento/${evento.id}`)}
-                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
-                          >
-                            Subir comprobante
-                          </button>
-                        </>
-                      )}
-
-                      {estadoEvento === 'completado' && (
-                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#444' }}>Completado ✓</div>
-                      )}
-                    </div>
                   )}
 
-                  {!esApoderado && <div className="event-details">Estado: {estado}</div>}
+                  <div className="event-details">Estado: {estado}</div>
 
                   <div style={{ marginTop: '0.75rem' }}>
                     <button

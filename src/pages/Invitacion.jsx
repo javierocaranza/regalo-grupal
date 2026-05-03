@@ -62,6 +62,43 @@ function Invitacion() {
       return
     }
 
+    const nombreNorm = nombreInvitado.trim().toLowerCase().replace(/\s+/g, ' ')
+
+    // Verificar que no sea un alumno del curso
+    const cursoId = evento.curso_id
+    if (cursoId) {
+      const { data: alumnosData, error: alumnosError } = await supabase
+        .from('alumnos')
+        .select('nombre')
+        .eq('curso_id', cursoId)
+
+      if (!alumnosError && alumnosData) {
+        const coincide = alumnosData.some(
+          (alumno) => (alumno.nombre || '').trim().toLowerCase().replace(/\s+/g, ' ') === nombreNorm
+        )
+        if (coincide) {
+          setError('Este alumno ya pertenece al curso, usa el link de tu curso para inscribirte.')
+          return
+        }
+      }
+    }
+
+    // Verificar que no esté ya registrado como invitado externo
+    const { data: yaRegistrado, error: yaRegistradoError } = await supabase
+      .from('invitados_externos')
+      .select('id')
+      .eq('evento_id', evento.id)
+
+    if (!yaRegistradoError && yaRegistrado) {
+      const duplicado = yaRegistrado.some(
+        (inv) => (inv.nombre_invitado || '').trim().toLowerCase().replace(/\s+/g, ' ') === nombreNorm
+      )
+      if (duplicado) {
+        setError('Este invitado ya está registrado en este cumpleaños.')
+        return
+      }
+    }
+
     setConfirmando(tipo)
 
     const payload = {
