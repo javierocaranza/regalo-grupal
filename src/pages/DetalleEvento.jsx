@@ -55,6 +55,10 @@ function DetalleEvento() {
   const [cambiandoPinCoord, setCambiandoPinCoord] = useState(false)
   const [errorPinCoord, setErrorPinCoord] = useState('')
   const [mensajePinCoord, setMensajePinCoord] = useState('')
+  const [activandoToken, setActivandoToken] = useState(false)
+  const [copiadoLink, setCopiadoLink] = useState(false)
+  const [invitadosExternos, setInvitadosExternos] = useState([])
+  const [actualizandoPagoExternoId, setActualizandoPagoExternoId] = useState(null)
 
   const cambiarPinCoordinador = async () => {
     const actualNorm = String(pinCoordActual).trim()
@@ -218,6 +222,12 @@ function DetalleEvento() {
       }
 
       setEvento(eventoData)
+
+      const { data: invExtData } = await supabase
+        .from('invitados_externos')
+        .select('*')
+        .eq('evento_id', eventoId)
+      setInvitadosExternos(invExtData || [])
 
       const { data: cumpleanerosData, error: cumpleanerosError } = await supabase
         .from('cumpleaneros')
@@ -705,6 +715,49 @@ function DetalleEvento() {
 
     setEvento(data)
     setMensajeAdmin('🎉 ¡Cumpleaños completado! Todos los pagos fueron confirmados.')
+  }
+
+  const activarInvitacionesExternas = async () => {
+    setActivandoToken(true)
+    const nuevoToken = crypto.randomUUID()
+    const eventoId = parseInt(id, 10)
+    const { data, error: updateError } = await supabase
+      .from('eventos')
+      .update({ token_invitacion: nuevoToken })
+      .eq('id', eventoId)
+      .select('*')
+      .single()
+    setActivandoToken(false)
+    if (updateError) {
+      console.error('Error activando invitaciones externas:', updateError)
+      setErrorAdmin('No se pudo activar las invitaciones externas.')
+      return
+    }
+    setEvento(data)
+  }
+
+  const copiarLinkInvitacion = () => {
+    const link = `https://micurso.netlify.app/invitacion/${evento.token_invitacion}`
+    navigator.clipboard.writeText(link).then(() => {
+      setCopiadoLink(true)
+      setTimeout(() => setCopiadoLink(false), 2000)
+    })
+  }
+
+  const cambiarEstadoPagoExterno = async (invitadoId, nuevoEstado) => {
+    setActualizandoPagoExternoId(invitadoId)
+    const { data, error: updateError } = await supabase
+      .from('invitados_externos')
+      .update({ estado_pago: nuevoEstado })
+      .eq('id', invitadoId)
+      .select('*')
+      .single()
+    setActualizandoPagoExternoId(null)
+    if (updateError) {
+      console.error('Error actualizando estado de pago externo:', updateError)
+      return
+    }
+    setInvitadosExternos((prev) => prev.map((inv) => (inv.id === invitadoId ? { ...inv, ...data } : inv)))
   }
 
   const resetearParticipacionLocal = () => {
@@ -1222,6 +1275,33 @@ function DetalleEvento() {
               )}
 
               <div className="admin-gestion-box">
+                <div style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontWeight: 600, fontSize: '0.9rem' }}>Invitaciones externas</p>
+                  {evento.token_invitacion ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.82rem', color: '#374151', wordBreak: 'break-all' }}>
+                        {`https://micurso.netlify.app/invitacion/${evento.token_invitacion}`}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={copiarLinkInvitacion}
+                      >
+                        {copiadoLink ? 'Copiado ✓' : 'Copiar link'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      disabled={activandoToken}
+                      onClick={activarInvitacionesExternas}
+                    >
+                      {activandoToken ? 'Activando...' : 'Activar invitaciones externas'}
+                    </button>
+                  )}
+                </div>
+
                 {estadoEvento === 'abierto' && (
                   <button
                     type="button"
@@ -1494,6 +1574,58 @@ function DetalleEvento() {
                             >
                               {desinscribiendoId === participante.id ? 'Desinscribiendo...' : 'Desinscribir'}
                             </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <h4 className="upcoming-title" style={{ marginTop: '1.2rem', marginBottom: '0.8rem' }}>Invitados externos</h4>
+                    {invitadosExternos.length === 0 ? (
+                      <p style={{ margin: 0 }}>No hay invitados externos registrados.</p>
+                    ) : (
+                      <div className="events-list">
+                        {invitadosExternos.map((inv, index) => (
+                          <div key={inv.id ?? `ext-${index}`} className="event-item admin-participante-row">
+                            <div className="event-name">{inv.nombre_invitado || 'Sin nombre'}</div>
+                            {inv.nombre_apoderado && (
+                              <div className="event-details">Apoderado: {inv.nombre_apoderado}</div>
+                            )}
+                            <div className="event-details">
+                              Tipo: {inv.tipo_participacion === 'regalo_y_cumple' ? 'Regalo y cumpleaños 🎁' : 'Solo cumpleaños 🎂'}
+                            </div>
+                            <div className="event-details">Estado: {formatEstadoPago({ estado_pago: inv.estado_pago })}</div>
+
+                            {(inv.imagen_comprobante || inv.comprobante_url) && (
+                              <a
+                                href={inv.imagen_comprobante || inv.comprobante_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="comprobante-link"
+                              >
+                                Ver comprobante
+                              </a>
+                            )}
+
+                            {inv.estado_pago === 'comprobante_subido' && (
+                              <div className="admin-acciones">
+                                <button
+                                  type="button"
+                                  className="btn btn-aprobar"
+                                  disabled={actualizandoPagoExternoId === inv.id}
+                                  onClick={() => cambiarEstadoPagoExterno(inv.id, 'pagado')}
+                                >
+                                  {actualizandoPagoExternoId === inv.id ? '...' : 'Aprobar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-rechazar"
+                                  disabled={actualizandoPagoExternoId === inv.id}
+                                  onClick={() => cambiarEstadoPagoExterno(inv.id, 'pendiente')}
+                                >
+                                  {actualizandoPagoExternoId === inv.id ? '...' : 'Rechazar'}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

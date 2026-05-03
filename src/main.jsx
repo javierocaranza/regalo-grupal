@@ -11,6 +11,7 @@ import DetalleEvento from './pages/DetalleEvento.jsx'
 import Acusete from './pages/Acusete.jsx'
 import HistorialEventos from './pages/HistorialEventos'
 import Admin from './pages/Admin.jsx'
+import Invitacion from './pages/Invitacion.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -19,6 +20,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<App />} />
         <Route path="/mi-curso" element={<MiCurso />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/invitacion/:tokenInvitacion" element={<Invitacion />} />
         <Route path="/:token" element={<CursoEntrada />} />
         <Route path="/:token/mis-eventos" element={<MisEventos />} />
         <Route path="/:token/crear-evento" element={<CrearEvento />} />
