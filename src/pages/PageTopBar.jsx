@@ -29,7 +29,13 @@ function PageTopBar() {
   }
 
   const handleGoHome = () => {
-    // Volver al inicio real (pantalla principal de seleccion)
+    const firstSegment = location.pathname.split('/').filter(Boolean)[0]
+    const nonTokenRoutes = ['admin', 'mi-curso', 'invitacion']
+    if (firstSegment && !nonTokenRoutes.includes(firstSegment)) {
+      navigate(`/${firstSegment}`, { replace: true })
+      return
+    }
+    // Sin token de curso → volver al inicio global
     window.localStorage.removeItem('rol_ingreso_activo')
     window.localStorage.removeItem('curso_id_activo')
     window.localStorage.removeItem('alumno_apoderado_id_activo')

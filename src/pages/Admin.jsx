@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import { logActivity } from '../utils/activityLog.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -28,6 +29,9 @@ function Admin() {
   const [confirmarPinCoordinadorNuevo, setConfirmarPinCoordinadorNuevo] = useState('')
   const [cambiandoPinCoordinador, setCambiandoPinCoordinador] = useState(false)
   const [errorPinCoordinador, setErrorPinCoordinador] = useState('')
+  const [activityLog, setActivityLog] = useState([])
+  const [loadingLog, setLoadingLog] = useState(false)
+  const [filtroCursoLog, setFiltroCursoLog] = useState('')
 
   useEffect(() => {
     const cargarCursos = async () => {
@@ -48,6 +52,15 @@ function Admin() {
       }
 
       setCursos(data || [])
+
+      setLoadingLog(true)
+      const { data: logData } = await supabase
+        .from('activity_log')
+        .select('*')
+        .order('fecha_hora', { ascending: false })
+        .limit(100)
+      setActivityLog(logData || [])
+      setLoadingLog(false)
       setLoading(false)
     }
 
@@ -117,6 +130,7 @@ function Admin() {
     setConfirmarPinNuevo('')
     setModalPinAbierto(false)
     setMensajePin('PIN actualizado correctamente.')
+    logActivity(supabase, { accion: 'cambio_pin_admin', tabla_afectada: 'admins', registro_id: null, rol: 'admin', nombre_usuario: '', curso_id: null, detalle: null })
   }
 
   const abrirModalPinCoordinador = (curso) => {
@@ -162,6 +176,7 @@ function Admin() {
         c.id === cursoSeleccionado.id ? { ...c, pin_coordinador: pinNorm } : c
       )
     )
+    logActivity(supabase, { accion: 'cambio_pin_coordinador', tabla_afectada: 'cursos', registro_id: cursoSeleccionado.id, rol: 'admin', nombre_usuario: '', curso_id: cursoSeleccionado.id, detalle: null })
     setModalPinCoordinadorAbierto(false)
   }
 
@@ -202,6 +217,7 @@ function Admin() {
     }
 
     setCursos((prev) => [nuevoCurso, ...prev])
+    logActivity(supabase, { accion: 'crear_curso', tabla_afectada: 'cursos', registro_id: nuevoCurso.id, rol: 'admin', nombre_usuario: nuevoCurso.nombre || '', curso_id: nuevoCurso.id, detalle: null })
     setModalCrearCursoAbierto(false)
   }
 
@@ -574,6 +590,70 @@ function Admin() {
             </div>
           )}
         </>
+      )}
+
+      {!loading && !error && (
+        <div className="upcoming-events" style={{ marginTop: '2rem' }}>
+          <h3 className="upcoming-title">Log de Actividad</h3>
+          <div style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label htmlFor="filtroCursoLog" style={{ fontSize: '0.82rem', color: '#555' }}>Filtrar por curso:</label>
+            <select
+              id="filtroCursoLog"
+              value={filtroCursoLog}
+              onChange={(e) => setFiltroCursoLog(e.target.value)}
+              style={{ fontSize: '0.82rem', padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #ddd' }}
+            >
+              <option value="">Todos</option>
+              {cursos.map((c) => (
+                <option key={c.id} value={String(c.id)}>{c.nombre}{c.anio ? ` - ${c.anio}` : ''}</option>
+              ))}
+            </select>
+          </div>
+          {loadingLog ? (
+            <p style={{ fontSize: '0.82rem' }}>Cargando log...</p>
+          ) : activityLog.length === 0 ? (
+            <p style={{ fontSize: '0.82rem' }}>No hay registros.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5', textAlign: 'left' }}>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0', whiteSpace: 'nowrap' }}>Fecha y hora</th>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0' }}>Curso</th>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0' }}>Rol</th>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0' }}>Usuario</th>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0' }}>Acción</th>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0' }}>Tabla</th>
+                    <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid #e0e0e0' }}>Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityLog
+                    .filter((entry) => !filtroCursoLog || String(entry.curso_id) === filtroCursoLog)
+                    .map((entry) => {
+                      const cursoNombre = entry.curso_id
+                        ? (cursos.find((c) => c.id === entry.curso_id)?.nombre || `#${entry.curso_id}`)
+                        : '-'
+                      const fecha = entry.fecha_hora
+                        ? new Date(entry.fecha_hora).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        : '-'
+                      return (
+                        <tr key={entry.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ padding: '0.3rem 0.5rem', whiteSpace: 'nowrap', color: '#666' }}>{fecha}</td>
+                          <td style={{ padding: '0.3rem 0.5rem' }}>{cursoNombre}</td>
+                          <td style={{ padding: '0.3rem 0.5rem' }}>{entry.rol || '-'}</td>
+                          <td style={{ padding: '0.3rem 0.5rem' }}>{entry.nombre_usuario || '-'}</td>
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>{entry.accion}</td>
+                          <td style={{ padding: '0.3rem 0.5rem', color: '#888' }}>{entry.tabla_afectada}</td>
+                          <td style={{ padding: '0.3rem 0.5rem', color: '#888' }}>{entry.detalle || '-'}</td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

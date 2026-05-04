@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { supabase } from '../supabase.js'
+import { logActivity } from '../utils/activityLog.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -226,6 +227,7 @@ function MiCurso() {
       console.error('Error importando alumnos:', error)
       return false
     }
+    logActivity(supabase, { accion: 'importar_csv', tabla_afectada: 'alumnos', registro_id: null, rol: 'coordinador', nombre_usuario: '', curso_id: cursoId || null, detalle: `cantidad:${processedAlumnos.length}` })
     return true
   }
 
@@ -419,6 +421,7 @@ function MiCurso() {
       }
 
       setAlumnos([...alumnos, mapDbToStudent(data)])
+      logActivity(supabase, { accion: 'agregar_alumno', tabla_afectada: 'alumnos', registro_id: data.id, rol: 'coordinador', nombre_usuario: data.nombre || '', curso_id: cursoIdActivo || null, detalle: null })
     }
 
     setShowForm(false)

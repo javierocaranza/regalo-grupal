@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import { logActivity } from '../utils/activityLog.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -181,6 +182,7 @@ function CrearEvento() {
         return
       }
 
+      logActivity(supabase, { accion: 'crear_cumpleanos', tabla_afectada: 'eventos', registro_id: null, rol: rolIngreso || 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: null })
       alert('¡Cumpleaños creado exitosamente!')
       const adminParam = rolIngreso === 'coordinador' ? '?admin=true' : ''
       navigate(`/${token}/mis-eventos${adminParam}`)

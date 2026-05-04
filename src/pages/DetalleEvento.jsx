@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import { logActivity } from '../utils/activityLog.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -59,6 +60,7 @@ function DetalleEvento() {
   const [copiadoLink, setCopiadoLink] = useState(false)
   const [invitadosExternos, setInvitadosExternos] = useState([])
   const [actualizandoPagoExternoId, setActualizandoPagoExternoId] = useState(null)
+  const [desinscribiendoExternoId, setDesinscribiendoExternoId] = useState(null)
 
   const cambiarPinCoordinador = async () => {
     const actualNorm = String(pinCoordActual).trim()
@@ -441,6 +443,7 @@ function DetalleEvento() {
 
     const participanteIdCreado = data.id
 
+    logActivity(supabase, { accion: 'inscripcion', tabla_afectada: 'participantes', registro_id: participanteIdCreado, rol: rolIngreso || 'coordinador', nombre_usuario: alumnoApoderadoNombre || nombreManual || '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${id}` })
     setMiParticipacion({ ...nuevoParticipante, id: participanteIdCreado })
     setParticipantes((prev) => [nuevoParticipante, ...prev])
     if (esInvitadoExterno) {
@@ -558,6 +561,7 @@ function DetalleEvento() {
       alumnoNombre: participanteActualizado.nombre_participante || miParticipacion.alumnoNombre || 'Sin nombre'
     }
 
+    logActivity(supabase, { accion: 'subida_comprobante', tabla_afectada: 'participantes', registro_id: participanteId, rol: rolIngreso || 'apoderado', nombre_usuario: alumnoApoderadoNombre || '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${id}` })
     setMiParticipacion(participanteConComprobante)
     setParticipantes((prev) =>
       prev.map((p) => (p.id === participanteConComprobante.id ? participanteConComprobante : p))
@@ -583,6 +587,7 @@ function DetalleEvento() {
       return
     }
 
+    logActivity(supabase, { accion: nuevoEstado === 'pagado' ? 'aprobacion_pago' : 'rechazo_pago', tabla_afectada: 'participantes', registro_id: participanteId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${id}` })
     setParticipantes((prev) =>
       prev.map((p) =>
         p.id === participanteId
@@ -613,6 +618,7 @@ function DetalleEvento() {
       return
     }
 
+    logActivity(supabase, { accion: 'cierre_lista', tabla_afectada: 'eventos', registro_id: eventoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: null })
     setEvento(data)
     setMensajeAdmin('Lista de participantes cerrada exitosamente.')
   }
@@ -625,11 +631,13 @@ function DetalleEvento() {
       return
     }
     const participantesRegalo = participantes.filter((p) => p.participa_regalo !== false)
-    if (participantesRegalo.length === 0) {
+    const externosRegalo = invitadosExternos.filter((inv) => inv.participa_regalo)
+    const totalAportantes = participantesRegalo.length + externosRegalo.length
+    if (totalAportantes === 0) {
       setErrorAdmin('No hay participantes que aporten al regalo para calcular la cuota.')
       return
     }
-    setCuotaCalculada(Math.ceil(monto / participantesRegalo.length))
+    setCuotaCalculada(Math.ceil(monto / totalAportantes))
   }
 
   const confirmarCuotaYPasarACobro = async () => {
@@ -670,17 +678,33 @@ function DetalleEvento() {
       .eq('evento_id', eventoId)
       .eq('participa_regalo', false)
 
+    const { error: externosRegaloError } = await supabase
+      .from('invitados_externos')
+      .update({ cuota: cuotaCalculada })
+      .eq('evento_id', eventoId)
+      .eq('participa_regalo', true)
+
+    const { error: externosSinRegaloError } = await supabase
+      .from('invitados_externos')
+      .update({ cuota: 0 })
+      .eq('evento_id', eventoId)
+      .eq('participa_regalo', false)
+
     setConfirmandoCuota(false)
 
-    if (participantesRegaloError || participantesSinRegaloError) {
-      console.error('Error actualizando cuotas:', participantesRegaloError || participantesSinRegaloError)
-      setErrorAdmin('Monto guardado, pero no se pudieron actualizar las cuotas en participantes.')
+    if (participantesRegaloError || participantesSinRegaloError || externosRegaloError || externosSinRegaloError) {
+      console.error('Error actualizando cuotas:', participantesRegaloError || participantesSinRegaloError || externosRegaloError || externosSinRegaloError)
+      setErrorAdmin('Monto guardado, pero no se pudieron actualizar algunas cuotas.')
       return
     }
 
+    logActivity(supabase, { accion: 'cambio_en_pago', tabla_afectada: 'eventos', registro_id: eventoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `cuota:${cuotaCalculada}` })
     setEvento(eventoActualizado)
     setParticipantes((prev) =>
       prev.map((p) => ({ ...p, cuota: p.participa_regalo === false ? 0 : cuotaCalculada }))
+    )
+    setInvitadosExternos((prev) =>
+      prev.map((inv) => ({ ...inv, cuota: inv.participa_regalo ? cuotaCalculada : 0 }))
     )
     setMensajeAdmin(
       `Cuota de $${cuotaCalculada.toLocaleString('es-CL')} confirmada. El cumpleaños paso a estado "en_pago".`
@@ -689,8 +713,11 @@ function DetalleEvento() {
 
   const participantesRegalo = participantes.filter((p) => p.participa_regalo !== false)
   const participantesSoloCumple = participantes.filter((p) => p.participa_regalo === false)
+  const externosRegalo = invitadosExternos.filter((inv) => inv.participa_regalo)
   const todosHanPagado =
-    participantesRegalo.length > 0 && participantesRegalo.every((p) => p.estado === 'pagado')
+    (participantesRegalo.length > 0 || externosRegalo.length > 0) &&
+    participantesRegalo.every((p) => p.estado === 'pagado') &&
+    externosRegalo.every((inv) => inv.estado === 'pagado')
 
   const marcarComoCompletado = async () => {
     setCompletandoEvento(true)
@@ -713,6 +740,7 @@ function DetalleEvento() {
       return
     }
 
+    logActivity(supabase, { accion: 'evento_completado', tabla_afectada: 'eventos', registro_id: eventoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: null })
     setEvento(data)
     setMensajeAdmin('🎉 ¡Cumpleaños completado! Todos los pagos fueron confirmados.')
   }
@@ -760,6 +788,21 @@ function DetalleEvento() {
     setInvitadosExternos((prev) => prev.map((inv) => (inv.id === invitadoId ? { ...inv, ...data } : inv)))
   }
 
+  const desinscribirInvitadoExterno = async (invitadoId, nombreInvitado) => {
+    setDesinscribiendoExternoId(invitadoId)
+    const { error: deleteError } = await supabase
+      .from('invitados_externos')
+      .delete()
+      .eq('id', invitadoId)
+    setDesinscribiendoExternoId(null)
+    if (deleteError) {
+      console.error('Error desinscribiendo invitado externo:', deleteError)
+      return
+    }
+    logActivity(supabase, { accion: 'desinscripcion_externo', tabla_afectada: 'invitados_externos', registro_id: invitadoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: nombreInvitado || null })
+    setInvitadosExternos((prev) => prev.filter((inv) => inv.id !== invitadoId))
+  }
+
   const resetearParticipacionLocal = () => {
     setMiParticipacion(null)
     if (esApoderado && alumnoApoderadoId) {
@@ -799,6 +842,7 @@ function DetalleEvento() {
       return
     }
 
+    logActivity(supabase, { accion: 'desinscripcion', tabla_afectada: 'participantes', registro_id: participanteId, rol: rolIngreso || 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${id}` })
     setParticipantes((prev) => prev.filter((p) => p.id !== participanteId))
     if (detalleParticipanteAbiertoId === participanteId) {
       setDetalleParticipanteAbiertoId(null)
@@ -1316,7 +1360,7 @@ function DetalleEvento() {
                 {estadoEvento === 'cerrado' && (
                   <div className="cuota-box">
                     <p className="admin-estado-badge">
-                      Estado: <strong>{estadoEvento}</strong> — {participantes.length} participante{participantes.length !== 1 ? 's' : ''} registrado{participantes.length !== 1 ? 's' : ''}
+                      Estado: <strong>{estadoEvento}</strong> — {participantes.length + invitadosExternos.length} participante{(participantes.length + invitadosExternos.length) !== 1 ? 's' : ''} registrado{(participantes.length + invitadosExternos.length) !== 1 ? 's' : ''} ({invitadosExternos.length} externo{invitadosExternos.length !== 1 ? 's' : ''})
                     </p>
                     <label htmlFor="montoTotal" className="participacion-label">
                       Monto total del regalo ($)
@@ -1364,20 +1408,20 @@ function DetalleEvento() {
                 {estadoEvento === 'en_pago' && (
                   <div className="cuota-box">
                     <p className="admin-estado-badge">
-                      Estado: <strong>{estadoEvento}</strong> — {participantes.length} participante{participantes.length !== 1 ? 's' : ''} registrado{participantes.length !== 1 ? 's' : ''}
+                      Estado: <strong>{estadoEvento}</strong> — {participantes.length + invitadosExternos.length} participante{(participantes.length + invitadosExternos.length) !== 1 ? 's' : ''} registrado{(participantes.length + invitadosExternos.length) !== 1 ? 's' : ''} ({invitadosExternos.length} externo{invitadosExternos.length !== 1 ? 's' : ''})
                     </p>
                     {evento.monto_total && (
                       <div className="cuota-resultado">
                         <span>Cuota fijada:</span>
                         <strong>
-                          ${Math.ceil(evento.monto_total / Math.max(participantesRegalo.length, 1)).toLocaleString('es-CL')}
+                          ${Math.ceil(evento.monto_total / Math.max(participantesRegalo.length + invitadosExternos.filter((inv) => inv.participa_regalo).length, 1)).toLocaleString('es-CL')}
                         </strong>
                       </div>
                     )}
                     <div className="completar-box">
                       {!todosHanPagado && (
                         <p className="completar-aviso">
-                          Faltan {participantesRegalo.filter((p) => p.estado !== 'pagado').length} pago{participantesRegalo.filter((p) => p.estado !== 'pagado').length !== 1 ? 's' : ''} por aprobar.
+                          Faltan {participantesRegalo.filter((p) => p.estado !== 'pagado').length + externosRegalo.filter((inv) => inv.estado !== 'pagado').length} pago{(participantesRegalo.filter((p) => p.estado !== 'pagado').length + externosRegalo.filter((inv) => inv.estado !== 'pagado').length) !== 1 ? 's' : ''} por aprobar.
                         </p>
                       )}
                       <button
@@ -1456,7 +1500,7 @@ function DetalleEvento() {
 
           <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
             <h3 className="upcoming-title">Participantes y Estado de Pago</h3>
-            {participantes.length === 0 ? (
+            {participantes.length === 0 && invitadosExternos.length === 0 ? (
               <p style={{ margin: 0 }}>No hay participantes registrados todavia.</p>
             ) : (
               <>
@@ -1656,6 +1700,15 @@ function DetalleEvento() {
                                 {esPagadoExt && (
                                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2e7d32' }}>✓</span>
                                 )}
+                                <button
+                                  type="button"
+                                  className="btn btn-rechazar"
+                                  disabled={desinscribiendoExternoId === inv.id}
+                                  onClick={() => desinscribirInvitadoExterno(inv.id, inv.nombre_invitado)}
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                >
+                                  {desinscribiendoExternoId === inv.id ? '...' : 'Desinscribir'}
+                                </button>
                               </div>
                             </div>
                           )

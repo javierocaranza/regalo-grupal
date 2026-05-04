@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
+import { logActivity } from '../utils/activityLog.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
@@ -113,6 +114,7 @@ function MisEventos() {
     }
 
     setInscripcionAbiertaEventoId(null)
+    logActivity(supabase, { accion: 'inscripcion', tabla_afectada: 'participantes', registro_id: null, rol: rolIngreso || 'apoderado', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${eventoId}` })
     actualizarEventos()
   }
 
@@ -131,6 +133,7 @@ function MisEventos() {
       return
     }
 
+    logActivity(supabase, { accion: 'cambio_tipo_participacion', tabla_afectada: 'participantes', registro_id: participanteId, rol: rolIngreso || 'apoderado', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${eventoId},participa_regalo:${participaRegalo}` })
     actualizarEventos()
   }
 
@@ -149,6 +152,7 @@ function MisEventos() {
       return
     }
 
+    logActivity(supabase, { accion: 'desinscripcion', tabla_afectada: 'participantes', registro_id: participanteId, rol: rolIngreso || 'apoderado', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${eventoId}` })
     actualizarEventos()
   }
 
