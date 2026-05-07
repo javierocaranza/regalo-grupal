@@ -106,10 +106,11 @@ function Invitacion() {
     }
     const nombreNorm = nombreInvitado.trim().toLowerCase().replace(/\s+/g, ' ')
 
-    // Verificar que no sea alumno de ningún curso
+    // Verificar que no sea alumno del curso del cumpleaños
     const { data: alumnosData, error: alumnosError } = await supabase
       .from('alumnos')
       .select('nombre')
+      .eq('curso_id', evento.curso_id)
     if (!alumnosError && alumnosData) {
       const palabrasIngresadas = nombreInvitado.trim().toLowerCase().split(/\s+/).filter((p) => p.length >= 3)
       const coincide = alumnosData.some((a) => {

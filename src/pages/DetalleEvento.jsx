@@ -244,6 +244,7 @@ function DetalleEvento() {
       const { data: alumnosData, error: alumnosError } = await supabase
         .from('alumnos')
         .select('id, nombre')
+        .eq('curso_id', parseInt(cursoIdActivo, 10))
         .order('nombre', { ascending: true })
 
       if (alumnosError) {
@@ -1460,6 +1461,18 @@ function DetalleEvento() {
                         <span>Cuota fijada:</span>
                         <strong>
                           ${Math.ceil(evento.monto_total / Math.max(participantesRegalo.length + invitadosExternos.filter((inv) => inv.participa_regalo).length, 1)).toLocaleString('es-CL')}
+                        </strong>
+                      </div>
+                    )}
+                    {evento.monto_total && (
+                      <div className="cuota-resultado">
+                        <span>Saldo por cobrar:</span>
+                        <strong>
+                          ${(
+                            Math.ceil(evento.monto_total / Math.max(participantesRegalo.length + externosRegalo.length, 1)) *
+                            (participantesRegalo.filter((p) => p.estado !== 'pagado').length +
+                              externosRegalo.filter((inv) => inv.estado !== 'pagado').length)
+                          ).toLocaleString('es-CL')}
                         </strong>
                       </div>
                     )}
