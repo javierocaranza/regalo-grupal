@@ -39,6 +39,7 @@ function DetalleEvento() {
   const [cuotaCalculada, setCuotaCalculada] = useState(null)
   const [confirmandoCuota, setConfirmandoCuota] = useState(false)
   const [completandoEvento, setCompletandoEvento] = useState(false)
+  const [retrocediendoEstado, setRetrocediendoEstado] = useState(false)
   const [boletaFile, setBoletaFile] = useState(null)
   const [regaloFile, setRegaloFile] = useState(null)
   const [boletaUrl, setBoletaUrl] = useState('')
@@ -745,6 +746,41 @@ function DetalleEvento() {
     setMensajeAdmin('🎉 ¡Cumpleaños completado! Todos los pagos fueron confirmados.')
   }
 
+  const retrocederEstado = async () => {
+    const mapRetroceso = {
+      completado: 'en_pago',
+      en_pago: 'cerrado',
+      cerrado: 'abierto'
+    }
+    const estadoAnterior = mapRetroceso[estadoEventoNormalizado]
+    if (!estadoAnterior) return
+    if (!window.confirm('¿Estás seguro que quieres retroceder el estado?')) return
+
+    setRetrocediendoEstado(true)
+    setErrorAdmin('')
+    setMensajeAdmin('')
+
+    const eventoId = parseInt(id, 10)
+    const { data, error: updateError } = await supabase
+      .from('eventos')
+      .update({ estado: estadoAnterior })
+      .eq('id', eventoId)
+      .select('*')
+      .single()
+
+    setRetrocediendoEstado(false)
+
+    if (updateError) {
+      console.error('Error retrocediendo estado:', updateError)
+      setErrorAdmin('No se pudo retroceder el estado del cumpleaños.')
+      return
+    }
+
+    logActivity(supabase, { accion: 'retroceso_estado', tabla_afectada: 'eventos', registro_id: eventoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `de ${estadoEventoNormalizado} a ${estadoAnterior}` })
+    setEvento(data)
+    setMensajeAdmin(`Estado retrocedido a "${estadoAnterior}".`)
+  }
+
   const activarInvitacionesExternas = async () => {
     setActivandoToken(true)
     const nuevoToken = crypto.randomUUID()
@@ -1402,6 +1438,15 @@ function DetalleEvento() {
                         {confirmandoCuota ? 'Guardando...' : 'Confirmar cuota y pasar a cobro'}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={retrocediendoEstado}
+                      onClick={retrocederEstado}
+                      style={{ background: 'transparent', border: '1px solid #6b7280', color: '#6b7280', marginTop: '0.5rem' }}
+                    >
+                      {retrocediendoEstado ? 'Retrocediendo...' : 'Volver a abierto'}
+                    </button>
                   </div>
                 )}
 
@@ -1433,6 +1478,15 @@ function DetalleEvento() {
                         {completandoEvento ? 'Guardando...' : 'Marcar como completado'}
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={retrocediendoEstado}
+                      onClick={retrocederEstado}
+                      style={{ background: 'transparent', border: '1px solid #6b7280', color: '#6b7280', marginTop: '0.5rem' }}
+                    >
+                      {retrocediendoEstado ? 'Retrocediendo...' : 'Volver a cerrado'}
+                    </button>
                   </div>
                 )}
 
@@ -1441,6 +1495,16 @@ function DetalleEvento() {
                     <div className="completado-celebracion">
                       🎉 ¡Cumpleaños completado! Todos los pagos fueron confirmados.
                     </div>
+
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={retrocediendoEstado}
+                      onClick={retrocederEstado}
+                      style={{ background: 'transparent', border: '1px solid #6b7280', color: '#6b7280', marginTop: '0.75rem' }}
+                    >
+                      {retrocediendoEstado ? 'Retrocediendo...' : 'Volver a en_pago'}
+                    </button>
 
                     <div style={{ marginTop: '1rem' }}>
                       <label htmlFor="boletaFile" className="participacion-label">Foto de boleta</label>
