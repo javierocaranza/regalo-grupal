@@ -60,6 +60,10 @@ function DetalleEvento() {
   const [activandoToken, setActivandoToken] = useState(false)
   const [copiadoLink, setCopiadoLink] = useState(false)
   const [invitadosExternos, setInvitadosExternos] = useState([])
+  const [modalCuentaAbierto, setModalCuentaAbierto] = useState(false)
+  const [editCuenta, setEditCuenta] = useState({ nombre_coordinador: '', rut_coordinador: '', banco: '', tipo_cuenta: '', numero_cuenta: '', email_pago: '' })
+  const [guardandoCuenta, setGuardandoCuenta] = useState(false)
+  const [errorCuenta, setErrorCuenta] = useState('')
   const [actualizandoPagoExternoId, setActualizandoPagoExternoId] = useState(null)
   const [desinscribiendoExternoId, setDesinscribiendoExternoId] = useState(null)
 
@@ -782,6 +786,34 @@ function DetalleEvento() {
     setMensajeAdmin(`Estado retrocedido a "${estadoAnterior}".`)
   }
 
+  const guardarCuenta = async () => {
+    setGuardandoCuenta(true)
+    setErrorCuenta('')
+    const eventoId = parseInt(id, 10)
+    const { data, error: updateError } = await supabase
+      .from('eventos')
+      .update({
+        nombre_coordinador: editCuenta.nombre_coordinador.trim(),
+        rut_coordinador: editCuenta.rut_coordinador.trim(),
+        banco: editCuenta.banco.trim(),
+        tipo_cuenta: editCuenta.tipo_cuenta.trim(),
+        numero_cuenta: editCuenta.numero_cuenta.trim(),
+        email_pago: editCuenta.email_pago.trim()
+      })
+      .eq('id', eventoId)
+      .select('*')
+      .single()
+    setGuardandoCuenta(false)
+    if (updateError) {
+      console.error('Error actualizando cuenta:', updateError)
+      setErrorCuenta('No se pudo guardar los datos de la cuenta.')
+      return
+    }
+    logActivity(supabase, { accion: 'edicion_cuenta', tabla_afectada: 'eventos', registro_id: eventoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: null })
+    setEvento(data)
+    setModalCuentaAbierto(false)
+  }
+
   const activarInvitacionesExternas = async () => {
     setActivandoToken(true)
     const nuevoToken = crypto.randomUUID()
@@ -1283,6 +1315,18 @@ function DetalleEvento() {
 
                   {miParticipacion && esEventoEnPago && miParticipaRegalo && estadoMiParticipacion === 'pendiente' && (
                     <div className="comprobante-box" style={{ marginTop: '0.85rem' }}>
+                      {(evento.nombre_coordinador || evento.banco || evento.numero_cuenta) && (
+                        <div style={{ marginBottom: '0.75rem', padding: '0.65rem 0.8rem', background: '#f0f4ff', borderRadius: '8px', fontSize: '0.83rem', lineHeight: 1.8, color: '#374151' }}>
+                          <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>Datos para transferencia</div>
+                          {evento.nombre_coordinador && <div><strong>Nombre:</strong> {evento.nombre_coordinador}</div>}
+                          {evento.rut_coordinador && <div><strong>RUT:</strong> {evento.rut_coordinador}</div>}
+                          {evento.banco && <div><strong>Banco:</strong> {evento.banco}</div>}
+                          {evento.tipo_cuenta && <div><strong>Tipo cuenta:</strong> {evento.tipo_cuenta}</div>}
+                          {evento.numero_cuenta && <div><strong>N° cuenta:</strong> {evento.numero_cuenta}</div>}
+                          {evento.email_pago && <div><strong>Email:</strong> {evento.email_pago}</div>}
+                          {miParticipacion.cuota > 0 && <div style={{ marginTop: '0.3rem', fontWeight: 700 }}>Monto: ${miParticipacion.cuota.toLocaleString('es-CL')}</div>}
+                        </div>
+                      )}
                       <input
                         id="comprobanteFile"
                         type="file"
@@ -1381,6 +1425,38 @@ function DetalleEvento() {
                       {activandoToken ? 'Activando...' : 'Activar invitaciones externas'}
                     </button>
                   )}
+                </div>
+
+                <div style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>Cuenta para transferencias</p>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={() => {
+                        setEditCuenta({
+                          nombre_coordinador: evento.nombre_coordinador || '',
+                          rut_coordinador: evento.rut_coordinador || '',
+                          banco: evento.banco || '',
+                          tipo_cuenta: evento.tipo_cuenta || '',
+                          numero_cuenta: evento.numero_cuenta || '',
+                          email_pago: evento.email_pago || ''
+                        })
+                        setErrorCuenta('')
+                        setModalCuentaAbierto(true)
+                      }}
+                    >
+                      Editar
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '0.83rem', color: '#374151', lineHeight: 1.7 }}>
+                    <div><strong>Nombre:</strong> {evento.nombre_coordinador || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
+                    <div><strong>RUT:</strong> {evento.rut_coordinador || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
+                    <div><strong>Banco:</strong> {evento.banco || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
+                    <div><strong>Tipo cuenta:</strong> {evento.tipo_cuenta || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
+                    <div><strong>N° cuenta:</strong> {evento.numero_cuenta || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
+                    <div><strong>Email:</strong> {evento.email_pago || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
+                  </div>
                 </div>
 
                 {estadoEvento === 'abierto' && (
@@ -1823,6 +1899,80 @@ function DetalleEvento() {
             )}
           </div>
         </>
+      )}
+
+      {modalCuentaAbierto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 50
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '380px',
+              background: '#fff',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 12px 30px rgba(0,0,0,0.2)',
+              padding: '1.2rem',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: '#111827' }}>Editar cuenta</h3>
+
+            <div className="form-group">
+              <label htmlFor="editNombreCoord">Nombre</label>
+              <input id="editNombreCoord" type="text" value={editCuenta.nombre_coordinador} onChange={(e) => setEditCuenta((prev) => ({ ...prev, nombre_coordinador: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="editRutCoord">RUT</label>
+              <input id="editRutCoord" type="text" value={editCuenta.rut_coordinador} onChange={(e) => setEditCuenta((prev) => ({ ...prev, rut_coordinador: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="editBanco">Banco</label>
+              <input id="editBanco" type="text" value={editCuenta.banco} onChange={(e) => setEditCuenta((prev) => ({ ...prev, banco: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="editTipoCuenta">Tipo de cuenta</label>
+              <select id="editTipoCuenta" value={editCuenta.tipo_cuenta} onChange={(e) => setEditCuenta((prev) => ({ ...prev, tipo_cuenta: e.target.value }))}>
+                <option value="">Selecciona</option>
+                <option value="Cuenta Corriente">Cuenta Corriente</option>
+                <option value="Cuenta Vista">Cuenta Vista</option>
+                <option value="Cuenta de Ahorro">Cuenta de Ahorro</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="editNumeroCuenta">N° de cuenta</label>
+              <input id="editNumeroCuenta" type="text" value={editCuenta.numero_cuenta} onChange={(e) => setEditCuenta((prev) => ({ ...prev, numero_cuenta: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+              <label htmlFor="editEmailPago">Email</label>
+              <input id="editEmailPago" type="email" value={editCuenta.email_pago} onChange={(e) => setEditCuenta((prev) => ({ ...prev, email_pago: e.target.value }))} />
+            </div>
+
+            {errorCuenta && (
+              <p className="mensaje-error" style={{ marginTop: '0.3rem', marginBottom: '0.7rem' }}>{errorCuenta}</p>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.55rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setModalCuentaAbierto(false)} style={{ flex: 1 }}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={guardarCuenta} disabled={guardandoCuenta} style={{ flex: 1 }}>
+                {guardandoCuenta ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {modalPinCoordAbierto && (

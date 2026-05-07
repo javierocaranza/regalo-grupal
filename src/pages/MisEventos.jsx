@@ -592,6 +592,7 @@ function MisEventos() {
                     <div style={{ marginTop: '0.45rem', fontSize: '0.78rem', background: '#f9f9f9', borderRadius: '6px', padding: '0.45rem 0.7rem', color: '#555' }}>
                       <div style={{ fontWeight: 600, marginBottom: '0.15rem' }}>Cuota: {formatMonedaClp(miParticipacion.cuota)}</div>
                       {evento.nombre_coordinador && <div>Nombre: {evento.nombre_coordinador}</div>}
+                      {evento.rut_coordinador && <div>RUT: {evento.rut_coordinador}</div>}
                       {evento.banco && <div>Banco: {evento.banco}</div>}
                       {evento.tipo_cuenta && <div>Tipo: {evento.tipo_cuenta}</div>}
                       {evento.numero_cuenta && <div>N° cta: {evento.numero_cuenta}</div>}
