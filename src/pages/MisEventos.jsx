@@ -18,6 +18,13 @@ function MisEventos() {
   const [accionLoadingEventoId, setAccionLoadingEventoId] = useState(null)
   const [inscripcionAbiertaEventoId, setInscripcionAbiertaEventoId] = useState(null)
   const [recargaEventos, setRecargaEventos] = useState(0)
+  const [copiadoCampo, setCopiadoCampo] = useState(null)
+
+  const copiarAlPortapapeles = (valor, key) => {
+    navigator.clipboard.writeText(String(valor))
+    setCopiadoCampo(key)
+    setTimeout(() => setCopiadoCampo((prev) => (prev === key ? null : prev)), 2000)
+  }
 
   const normalizeCumpleaneros = (evento) => {
     if (Array.isArray(evento.cumpleaneros) && evento.cumpleaneros.length > 0) {
@@ -243,7 +250,7 @@ function MisEventos() {
 
       const { data: eventosData, error: eventosError } = await supabase
         .from('eventos')
-        .select('')
+        .select('*')
         .order('fecha_evento', { ascending: true })
 
       if (eventosError) {
@@ -594,9 +601,26 @@ function MisEventos() {
                       {evento.nombre_coordinador && <div>Nombre: {evento.nombre_coordinador}</div>}
                       {evento.rut_coordinador && <div>RUT: {evento.rut_coordinador}</div>}
                       {evento.banco && <div>Banco: {evento.banco}</div>}
-                      {evento.tipo_cuenta && <div>Tipo: {evento.tipo_cuenta}</div>}
-                      {evento.numero_cuenta && <div>N° cta: {evento.numero_cuenta}</div>}
+                      {evento.tipo_cuenta && <div>Tipo de cuenta: {evento.tipo_cuenta}</div>}
+                      {evento.numero_cuenta && <div>N° cuenta: {evento.numero_cuenta}</div>}
                       {evento.email_pago && <div>Email: {evento.email_pago}</div>}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const lineas = [
+                            evento.nombre_coordinador && `Nombre: ${evento.nombre_coordinador}`,
+                            evento.rut_coordinador && `RUT: ${evento.rut_coordinador}`,
+                            evento.banco && `Banco: ${evento.banco}`,
+                            evento.tipo_cuenta && `Tipo de cuenta: ${evento.tipo_cuenta}`,
+                            evento.numero_cuenta && `N° cuenta: ${evento.numero_cuenta}`,
+                            evento.email_pago && `Email: ${evento.email_pago}`,
+                          ].filter(Boolean).join('\n')
+                          copiarAlPortapapeles(lineas, `${evento.id}-organizador`)
+                        }}
+                        style={{ marginTop: '0.4rem', fontSize: '0.7rem', padding: '0.15rem 0.55rem', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '4px', background: '#fff', color: '#555' }}
+                      >
+                        {copiadoCampo === `${evento.id}-organizador` ? '✓ Copiado' : 'Copiar datos'}
+                      </button>
                     </div>
                   )}
                 </div>

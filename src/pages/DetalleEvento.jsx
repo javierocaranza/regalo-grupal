@@ -845,7 +845,7 @@ function DetalleEvento() {
     setActualizandoPagoExternoId(invitadoId)
     const { data, error: updateError } = await supabase
       .from('invitados_externos')
-      .update({ estado_pago: nuevoEstado })
+      .update({ estado: nuevoEstado })
       .eq('id', invitadoId)
       .select('*')
       .single()
@@ -854,6 +854,7 @@ function DetalleEvento() {
       console.error('Error actualizando estado de pago externo:', updateError)
       return
     }
+    logActivity(supabase, { accion: 'aprobacion_pago_externo', tabla_afectada: 'invitados_externos', registro_id: invitadoId, rol: 'coordinador', nombre_usuario: '', curso_id: parseInt(cursoIdActivo, 10) || null, detalle: `evento_id:${id},estado:${nuevoEstado}` })
     setInvitadosExternos((prev) => prev.map((inv) => (inv.id === invitadoId ? { ...inv, ...data } : inv)))
   }
 
@@ -1102,15 +1103,34 @@ function DetalleEvento() {
             <h3 className="upcoming-title">Informacion del Cumpleaños</h3>
             <div className="event-item">
               <div className="event-details">Fecha: {formatFecha(fechaEvento)}</div>
-              <div className="event-details">
-                Descripcion: {evento.descripcion_regalo || evento.descripcion || 'Sin descripcion'}
-              </div>
-              <div className="event-details">Cuota minima: {cuotaMin}</div>
-              <div className="event-details">Cuota maxima: {cuotaMax}</div>
+              {(() => {
+                const desc = evento.descripcion_regalo || evento.descripcion || ''
+                const descNorm = desc.trim().toLowerCase()
+                if (!descNorm || descNorm === 'por definir') return null
+                return <div className="event-details">Descripcion: {desc}</div>
+              })()}
               {participantes.length > 0 && participantes[0]?.cuota > 0 && (
                 <div className="event-details">Cuota por participante: <strong>${participantes[0].cuota.toLocaleString('es-CL')}</strong></div>
               )}
-              <div className="event-details">Estado: {estadoEvento}</div>
+              <div className="event-details" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>Estado:</span>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '0.15rem 0.65rem',
+                  borderRadius: '999px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  ...(estadoEventoNormalizado === 'abierto' || estadoEventoNormalizado === 'activo'
+                    ? { background: '#d1fae5', color: '#065f46' }
+                    : estadoEventoNormalizado === 'cerrado'
+                    ? { background: '#fef9c3', color: '#78350f' }
+                    : estadoEventoNormalizado === 'en_pago'
+                    ? { background: '#dbeafe', color: '#1e40af' }
+                    : estadoEventoNormalizado === 'completado'
+                    ? { background: '#f3f4f6', color: '#374151' }
+                    : { background: '#f3f4f6', color: '#374151' })
+                }}>{estadoEvento}</span>
+              </div>
             </div>
           </div>
 
@@ -1217,6 +1237,7 @@ function DetalleEvento() {
                     className="btn btn-primary"
                     onClick={confirmarParticipacion}
                     disabled={confirmandoParticipacion || Boolean(participanteSeleccionado) || !puedeInscribirParticipantes}
+                    style={{ width: 'auto' }}
                   >
                     {confirmandoParticipacion ? 'Confirmando...' : 'Agregar participante'}
                   </button>
@@ -1427,37 +1448,7 @@ function DetalleEvento() {
                   )}
                 </div>
 
-                <div style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e5e7eb' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>Cuenta para transferencias</p>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small"
-                      onClick={() => {
-                        setEditCuenta({
-                          nombre_coordinador: evento.nombre_coordinador || '',
-                          rut_coordinador: evento.rut_coordinador || '',
-                          banco: evento.banco || '',
-                          tipo_cuenta: evento.tipo_cuenta || '',
-                          numero_cuenta: evento.numero_cuenta || '',
-                          email_pago: evento.email_pago || ''
-                        })
-                        setErrorCuenta('')
-                        setModalCuentaAbierto(true)
-                      }}
-                    >
-                      Editar
-                    </button>
-                  </div>
-                  <div style={{ fontSize: '0.83rem', color: '#374151', lineHeight: 1.7 }}>
-                    <div><strong>Nombre:</strong> {evento.nombre_coordinador || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
-                    <div><strong>RUT:</strong> {evento.rut_coordinador || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
-                    <div><strong>Banco:</strong> {evento.banco || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
-                    <div><strong>Tipo cuenta:</strong> {evento.tipo_cuenta || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
-                    <div><strong>N° cuenta:</strong> {evento.numero_cuenta || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
-                    <div><strong>Email:</strong> {evento.email_pago || <em style={{ color: '#9ca3af' }}>sin datos</em>}</div>
-                  </div>
-                </div>
+
 
                 {estadoEvento === 'abierto' && (
                   <button
