@@ -4,6 +4,15 @@ import { supabase } from '../supabase.js'
 import PageTopBar from './PageTopBar.jsx'
 import './pages.css'
 
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+function formatFechaCorta(fechaIso) {
+  if (!fechaIso) return ''
+  const date = new Date(`${fechaIso}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getDate()} ${MESES[date.getMonth()]}`
+}
+
 function Acusete() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -15,29 +24,23 @@ function Acusete() {
   const [resumenEventos, setResumenEventos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedAlumnos, setExpandedAlumnos] = useState({})
+  const [expandedEventos, setExpandedEventos] = useState({})
 
   const fetchData = async () => {
     setLoading(true)
     setError('')
 
-    const { data: alumnosCursoData, error: alumnosCursoError } = await supabase
-      .from('alumnos')
-      .select('id')
-      .eq('curso_id', cursoId)
+    const hoy = new Date().toISOString().split('T')[0]
 
-    if (alumnosCursoError) {
-      console.error('Error cargando alumnos del curso:', alumnosCursoError)
-      setError('No se pudieron cargar los alumnos del curso.')
-      setLoading(false)
-      return
-    }
-
-    const alumnoIdsCurso = (alumnosCursoData || []).map((row) => row.id)
-
+    // Solo eventos pasados, con monto_total definido y no completados
     const { data: eventosCursoData, error: eventosCursoError } = await supabase
       .from('eventos')
-      .select('id')
+      .select('id, fecha_evento')
       .eq('curso_id', cursoId)
+      .lt('fecha_evento', hoy)
+      .neq('estado', 'completado')
+      .not('monto_total', 'is', null)
 
     if (eventosCursoError) {
       console.error('Error cargando eventos del curso:', eventosCursoError)
@@ -47,43 +50,35 @@ function Acusete() {
     }
 
     const eventoIdsCurso = (eventosCursoData || []).map((row) => row.id)
+
+    if (eventoIdsCurso.length === 0) {
+      setResumenAlumnos([])
+      setResumenEventos([])
+      setLoading(false)
+      return
+    }
+
+    const eventosMap = {}
+    for (const evento of eventosCursoData) {
+      eventosMap[evento.id] = evento
+    }
+
     const estadosPendientes = ['pendiente', 'comprobante_subido']
-    const participantesPorAlumno = []
-    const participantesPorEvento = []
+    const { data: participantesData, error: participantesError } = await supabase
+      .from('participantes')
+      .select('id, alumno_id, cuota, estado, evento_id')
+      .in('evento_id', eventoIdsCurso)
+      .in('estado', estadosPendientes)
+      .not('cuota', 'is', null)
 
-    if (alumnoIdsCurso.length > 0) {
-      const { data, error: errParticipantesAlumno } = await supabase
-        .from('participantes')
-        .select('id, alumno_id, cuota, estado, evento_id')
-        .in('alumno_id', alumnoIdsCurso)
-        .in('estado', estadosPendientes)
-
-      if (errParticipantesAlumno) {
-        console.error('Error cargando participantes por alumno:', errParticipantesAlumno)
-      } else {
-        participantesPorAlumno.push(...(data || []))
-      }
+    if (participantesError) {
+      console.error('Error cargando participantes:', participantesError)
+      setError('No se pudieron cargar los participantes.')
+      setLoading(false)
+      return
     }
 
-    if (eventoIdsCurso.length > 0) {
-      const { data, error: errParticipantesEvento } = await supabase
-        .from('participantes')
-        .select('id, alumno_id, cuota, estado, evento_id')
-        .in('evento_id', eventoIdsCurso)
-        .in('estado', estadosPendientes)
-
-      if (errParticipantesEvento) {
-        console.error('Error cargando participantes por evento:', errParticipantesEvento)
-      } else {
-        participantesPorEvento.push(...(data || []))
-      }
-    }
-
-    const participantesMap = {}
-    for (const p of [...participantesPorAlumno, ...participantesPorEvento]) {
-      participantesMap[p.id] = p
-    }
-    const participantes = Object.values(participantesMap)
+    const participantes = (participantesData || []).filter((p) => Number(p.cuota) > 0)
 
     if (participantes.length === 0) {
       setResumenAlumnos([])
@@ -92,40 +87,54 @@ function Acusete() {
       return
     }
 
-    const eventoIds = [...new Set(participantes.map((p) => p.evento_id).filter(Boolean))]
-    const { data: eventosData, error: eventosError } = await supabase
-      .from('eventos')
-      .select('id, descripcion_regalo, fecha_evento')
-      .in('id', eventoIds)
+    // Traer cumpleañeros de cada evento para armar el label
+    const { data: cumpleanerosData } = await supabase
+      .from('cumpleaneros')
+      .select('evento_id, alumno_id')
+      .in('evento_id', eventoIdsCurso)
 
-    if (eventosError) {
-      console.error('Error cargando eventos usados en participantes:', eventosError)
-      setError('No se pudieron cargar los cumpleaños relacionados.')
-      setLoading(false)
-      return
+    const cumpleaneroAlumnoIds = [...new Set((cumpleanerosData || []).map((c) => c.alumno_id).filter(Boolean))]
+    const cumpleaneroNombresMap = {}
+    if (cumpleaneroAlumnoIds.length > 0) {
+      const { data: cumpleaneroAlumnosData } = await supabase
+        .from('alumnos')
+        .select('id, nombre')
+        .in('id', cumpleaneroAlumnoIds)
+      for (const a of cumpleaneroAlumnosData || []) {
+        cumpleaneroNombresMap[a.id] = a.nombre
+      }
     }
 
+    const eventoCumpleanerosMap = {}
+    for (const c of cumpleanerosData || []) {
+      if (!eventoCumpleanerosMap[c.evento_id]) eventoCumpleanerosMap[c.evento_id] = []
+      const nombre = cumpleaneroNombresMap[c.alumno_id]
+      if (nombre) eventoCumpleanerosMap[c.evento_id].push(nombre)
+    }
+
+    // Traer nombres de los participantes deudores
     const alumnoIds = [...new Set(participantes.map((p) => p.alumno_id).filter(Boolean))]
     const alumnosMap = {}
-
     if (alumnoIds.length > 0) {
       const { data: alumnosData, error: alumnosError } = await supabase
         .from('alumnos')
         .select('id, nombre')
         .in('id', alumnoIds)
-
       if (alumnosError) {
         console.error('Error cargando alumnos:', alumnosError)
       } else {
-        for (const alumno of alumnosData || []) {
-          alumnosMap[alumno.id] = alumno.nombre
+        for (const a of alumnosData || []) {
+          alumnosMap[a.id] = a.nombre
         }
       }
     }
 
-    const eventosMap = {}
-    for (const evento of eventosData || []) {
-      eventosMap[evento.id] = evento
+    const getEventoLabel = (eventoId) => {
+      const nombres = eventoCumpleanerosMap[eventoId] || []
+      const fecha = eventosMap[eventoId]?.fecha_evento
+      const fechaStr = formatFechaCorta(fecha)
+      const nombresStr = nombres.length > 0 ? nombres.join(', ') : `Cumpleaños ${eventoId}`
+      return fechaStr ? `Cumpleaños de ${nombresStr} · ${fechaStr}` : `Cumpleaños de ${nombresStr}`
     }
 
     // Resumen por alumno
@@ -133,45 +142,21 @@ function Acusete() {
     for (const p of participantes) {
       const key = p.alumno_id ?? `ext_${p.id}`
       const nombre = alumnosMap[p.alumno_id] || 'Sin nombre'
-      if (!porAlumno[key]) {
-        porAlumno[key] = { nombre, total: 0, eventos: [] }
-      }
-      porAlumno[key].total += Number(p.cuota) || 0
-      const eventoInfo = eventosMap[p.evento_id]
-      porAlumno[key].eventos.push({
-        eventoId: p.evento_id,
-        desc: eventoInfo?.descripcion_regalo || `Cumpleaños ${p.evento_id}`,
-        cuota: Number(p.cuota) || 0
-      })
+      if (!porAlumno[key]) porAlumno[key] = { nombre, total: 0, eventos: [] }
+      porAlumno[key].total += Number(p.cuota)
+      porAlumno[key].eventos.push({ eventoId: p.evento_id, label: getEventoLabel(p.evento_id), cuota: Number(p.cuota) })
     }
-    const resumenPorAlumno = Object.values(porAlumno).sort((a, b) =>
-      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
-    )
+    const resumenPorAlumno = Object.values(porAlumno).sort((a, b) => b.total - a.total)
 
     // Resumen por evento
     const porEvento = {}
     for (const p of participantes) {
       const eventoId = p.evento_id
-      if (!porEvento[eventoId]) {
-        const evento = eventosMap[eventoId]
-        const desc =
-          evento?.descripcion_regalo ||
-          `Cumpleaños ${eventoId}`
-        const fecha = evento?.fecha_evento || null
-        porEvento[eventoId] = { eventoId, desc, fecha, participantes: [] }
-      }
-      porEvento[eventoId].participantes.push({
-        nombre: alumnosMap[p.alumno_id] || 'Sin nombre',
-        cuota: Number(p.cuota) || 0,
-        estado: p.estado
-      })
+      if (!porEvento[eventoId]) porEvento[eventoId] = { eventoId, label: getEventoLabel(eventoId), total: 0, participantes: [] }
+      porEvento[eventoId].total += Number(p.cuota)
+      porEvento[eventoId].participantes.push({ nombre: alumnosMap[p.alumno_id] || 'Sin nombre', cuota: Number(p.cuota) })
     }
-    const resumenPorEvento = Object.values(porEvento).sort((a, b) => {
-      if (!a.fecha && !b.fecha) return 0
-      if (!a.fecha) return 1
-      if (!b.fecha) return -1
-      return new Date(`${a.fecha}T00:00:00`) - new Date(`${b.fecha}T00:00:00`)
-    })
+    const resumenPorEvento = Object.values(porEvento).sort((a, b) => b.total - a.total)
 
     setResumenAlumnos(resumenPorAlumno)
     setResumenEventos(resumenPorEvento)
@@ -220,12 +205,8 @@ function Acusete() {
     init()
   }, [cursoId])
 
-  const formatFecha = (fechaIso) => {
-    if (!fechaIso) return 'Sin fecha'
-    const date = new Date(`${fechaIso}T00:00:00`)
-    if (Number.isNaN(date.getTime())) return fechaIso
-    return date.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
-  }
+  const totalPorCobrar = resumenAlumnos.reduce((acc, a) => acc + a.total, 0)
+  const alumnosConDeuda = resumenAlumnos.length
 
   return (
     <div className="page-container">
@@ -233,25 +214,6 @@ function Acusete() {
 
       <h1 className="page-title">Acusete 🧾</h1>
       <p>Pagos pendientes de {cursoNombre}.</p>
-
-      <div className="buttons-container" style={{ marginTop: '0.75rem' }}>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setVista('alumno')}
-          disabled={vista === 'alumno'}
-        >
-          Ver por alumno
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setVista('evento')}
-          disabled={vista === 'evento'}
-        >
-          Ver por cumpleaños
-        </button>
-      </div>
 
       {loading && <p style={{ marginTop: '1.5rem' }}>Cargando datos...</p>}
 
@@ -263,7 +225,7 @@ function Acusete() {
             background: '#f8d7da',
             color: '#721c24',
             borderRadius: '8px',
-            border: '1px solid #f5c6cb'
+            border: '1px solid #f5c6cb',
           }}
         >
           {error}
@@ -272,58 +234,132 @@ function Acusete() {
 
       {!loading && !error && (
         <>
-          {vista === 'alumno' && (
-            <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
-            <h3 className="upcoming-title">Resumen por alumno</h3>
-            {resumenAlumnos.length === 0 ? (
-              <p style={{ margin: 0 }}>No hay pagos pendientes.</p>
-            ) : (
-              <div className="events-list">
-                {resumenAlumnos.map((alumno) => (
-                  <div key={alumno.nombre} className="event-item">
-                    <div className="event-name">{alumno.nombre}</div>
-                    <div className="event-details">
-                      Total adeudado: <strong>{alumno.total > 0 ? `$${alumno.total.toLocaleString('es-CL')}` : 'cuota por definir'}</strong>
-                    </div>
-                    {alumno.eventos.map((ev, i) => (
-                      <div key={i} className="event-details" style={{ paddingLeft: '0.5rem', borderLeft: '2px solid #ddd', marginTop: '0.25rem' }}>
-                        {ev.desc}: {ev.cuota > 0 ? `$${ev.cuota.toLocaleString('es-CL')}` : 'cuota por definir'}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Selector de vista compacto */}
+          <div style={{ display: 'flex', borderBottom: '2px solid #e0e0e0', marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => setVista('alumno')}
+              style={{
+                flex: 1,
+                padding: '0.5rem',
+                background: 'none',
+                border: 'none',
+                borderBottom: vista === 'alumno' ? '2px solid #333' : '2px solid transparent',
+                fontWeight: vista === 'alumno' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                marginBottom: '-2px',
+              }}
+            >
+              Por alumno
+            </button>
+            <button
+              type="button"
+              onClick={() => setVista('evento')}
+              style={{
+                flex: 1,
+                padding: '0.5rem',
+                background: 'none',
+                border: 'none',
+                borderBottom: vista === 'evento' ? '2px solid #333' : '2px solid transparent',
+                fontWeight: vista === 'evento' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                marginBottom: '-2px',
+              }}
+            >
+              Por cumpleaños
+            </button>
+          </div>
+
+          {/* Resumen global */}
+          {alumnosConDeuda > 0 && (
+            <div style={{ fontSize: '0.9rem', color: '#555', margin: '0.75rem 0' }}>
+              Total por cobrar: <strong>${totalPorCobrar.toLocaleString('es-CL')}</strong>
+              {' · '}
+              {alumnosConDeuda} {alumnosConDeuda === 1 ? 'alumno' : 'alumnos'} con deuda
             </div>
           )}
 
-          {vista === 'evento' && (
-            <div className="upcoming-events" style={{ marginTop: '1.5rem' }}>
-            <h3 className="upcoming-title">Resumen por cumpleaños</h3>
-            {resumenEventos.length === 0 ? (
-              <p style={{ margin: 0 }}>No hay pagos pendientes.</p>
-            ) : (
-              <div className="events-list">
-                {resumenEventos.map((evento) => (
-                  <div key={evento.eventoId} className="event-item">
-                    <div className="event-name">{evento.desc}</div>
-                    <div className="event-details">Fecha: {formatFecha(evento.fecha)}</div>
-                    <div style={{ marginTop: '0.5rem' }}>
-                      {evento.participantes.map((p, i) => (
-                        <div key={i} className="event-details">
-                          {p.nombre} — {p.cuota > 0 ? `$${p.cuota.toLocaleString('es-CL')}` : 'cuota por definir'} ({p.estado})
-                        </div>
-                      ))}
-                      {evento.participantes.some((p) => p.cuota > 0) && (
-                        <div className="event-details" style={{ marginTop: '0.25rem', fontWeight: 'bold' }}>
-                          Total pendiente: ${evento.participantes.reduce((acc, p) => acc + p.cuota, 0).toLocaleString('es-CL')}
-                        </div>
-                      )}
+          {/* Vista por alumno */}
+          {vista === 'alumno' && (
+            <div>
+              {resumenAlumnos.length === 0 ? (
+                <p style={{ margin: '1rem 0 0' }}>No hay pagos pendientes.</p>
+              ) : (
+                resumenAlumnos.map((alumno, i) => (
+                  <div key={alumno.nombre}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setExpandedAlumnos((prev) => ({ ...prev, [alumno.nombre]: !prev[alumno.nombre] }))}
+                      onKeyDown={(e) => e.key === 'Enter' && setExpandedAlumnos((prev) => ({ ...prev, [alumno.nombre]: !prev[alumno.nombre] }))}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', cursor: 'pointer' }}
+                    >
+                      <span>{alumno.nombre}</span>
+                      <span style={{ fontWeight: '600' }}>${alumno.total.toLocaleString('es-CL')}</span>
                     </div>
+                    {expandedAlumnos[alumno.nombre] && (
+                      <div style={{ paddingBottom: '0.5rem' }}>
+                        {alumno.eventos.map((ev, j) => (
+                          <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', paddingLeft: '0.75rem', paddingBottom: '0.25rem' }}>
+                            <span>{ev.label}</span>
+                            <span style={{ marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>${ev.cuota.toLocaleString('es-CL')}</span>
+                          </div>
+                        ))}
+                        {alumno.eventos.length > 1 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', paddingLeft: '0.75rem', paddingTop: '0.25rem', borderTop: '1px solid #e8e8e8', marginTop: '0.1rem' }}>
+                            <span>Total</span>
+                            <span>${alumno.total.toLocaleString('es-CL')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {i < resumenAlumnos.length - 1 && <div style={{ borderBottom: '1px solid #e8e8e8' }} />}
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Vista por cumpleaños */}
+          {vista === 'evento' && (
+            <div>
+              {resumenEventos.length === 0 ? (
+                <p style={{ margin: '1rem 0 0' }}>No hay pagos pendientes.</p>
+              ) : (
+                resumenEventos.map((evento, i) => (
+                  <div key={evento.eventoId}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setExpandedEventos((prev) => ({ ...prev, [evento.eventoId]: !prev[evento.eventoId] }))}
+                      onKeyDown={(e) => e.key === 'Enter' && setExpandedEventos((prev) => ({ ...prev, [evento.eventoId]: !prev[evento.eventoId] }))}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', cursor: 'pointer' }}
+                    >
+                      <span>{evento.label}</span>
+                      <span style={{ fontWeight: '600', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>${evento.total.toLocaleString('es-CL')}</span>
+                    </div>
+                    {expandedEventos[evento.eventoId] && (
+                      <div style={{ paddingBottom: '0.5rem' }}>
+                        {evento.participantes.map((p, j) => (
+                          <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', paddingLeft: '0.75rem', paddingBottom: '0.25rem' }}>
+                            <span>{p.nombre}</span>
+                            <span>${p.cuota.toLocaleString('es-CL')}</span>
+                          </div>
+                        ))}
+                        {evento.participantes.length > 1 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', paddingLeft: '0.75rem', paddingTop: '0.25rem', borderTop: '1px solid #e8e8e8', marginTop: '0.1rem' }}>
+                            <span>Total</span>
+                            <span>${evento.total.toLocaleString('es-CL')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {i < resumenEventos.length - 1 && <div style={{ borderBottom: '1px solid #e8e8e8' }} />}
+                  </div>
+                ))
+              )}
             </div>
           )}
         </>
