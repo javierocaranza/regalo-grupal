@@ -69,6 +69,7 @@ function Acusete() {
       .select('id, alumno_id, cuota, estado, evento_id')
       .in('evento_id', eventoIdsCurso)
       .in('estado', estadosPendientes)
+      .eq('participa_regalo', true)
       .not('cuota', 'is', null)
 
     if (participantesError) {
