@@ -107,14 +107,21 @@ function Acusete() {
     }
 
     const eventoCumpleanerosMap = {}
+    // Set de pares "eventoId_alumnoId" para excluir cumpleañeros de su propio evento
+    const cumpleaneroKeys = new Set()
     for (const c of cumpleanerosData || []) {
       if (!eventoCumpleanerosMap[c.evento_id]) eventoCumpleanerosMap[c.evento_id] = []
       const nombre = cumpleaneroNombresMap[c.alumno_id]
       if (nombre) eventoCumpleanerosMap[c.evento_id].push(nombre)
+      cumpleaneroKeys.add(`${c.evento_id}_${c.alumno_id}`)
     }
 
+    const participantesFiltrados = participantes.filter(
+      (p) => !cumpleaneroKeys.has(`${p.evento_id}_${p.alumno_id}`)
+    )
+
     // Traer nombres de los participantes deudores
-    const alumnoIds = [...new Set(participantes.map((p) => p.alumno_id).filter(Boolean))]
+    const alumnoIds = [...new Set(participantesFiltrados.map((p) => p.alumno_id).filter(Boolean))]
     const alumnosMap = {}
     if (alumnoIds.length > 0) {
       const { data: alumnosData, error: alumnosError } = await supabase
@@ -140,7 +147,7 @@ function Acusete() {
 
     // Resumen por alumno
     const porAlumno = {}
-    for (const p of participantes) {
+    for (const p of participantesFiltrados) {
       const key = p.alumno_id ?? `ext_${p.id}`
       const nombre = alumnosMap[p.alumno_id] || 'Sin nombre'
       if (!porAlumno[key]) porAlumno[key] = { nombre, total: 0, eventos: [] }
@@ -151,7 +158,7 @@ function Acusete() {
 
     // Resumen por evento
     const porEvento = {}
-    for (const p of participantes) {
+    for (const p of participantesFiltrados) {
       const eventoId = p.evento_id
       if (!porEvento[eventoId]) porEvento[eventoId] = { eventoId, label: getEventoLabel(eventoId), total: 0, participantes: [] }
       porEvento[eventoId].total += Number(p.cuota)
