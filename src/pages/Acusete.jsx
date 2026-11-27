@@ -154,6 +154,24 @@ function Acusete() {
       porAlumno[key].total += Number(p.cuota)
       porAlumno[key].eventos.push({ eventoId: p.evento_id, label: getEventoLabel(p.evento_id), cuota: Number(p.cuota) })
     }
+
+    // Fetch invitados externos pendientes de pago
+    const { data: externosData } = await supabase
+      .from('invitados_externos')
+      .select('id, nombre_invitado, cuota, estado, evento_id')
+      .in('evento_id', eventoIdsCurso)
+      .in('estado', estadosPendientes)
+      .eq('participa_regalo', true)
+      .not('cuota', 'is', null)
+
+    for (const inv of (externosData || []).filter((inv) => Number(inv.cuota) > 0)) {
+      const nombre = `${inv.nombre_invitado || 'Sin nombre'} (externo)`
+      const key = `externo_${inv.id}`
+      if (!porAlumno[key]) porAlumno[key] = { nombre, total: 0, eventos: [] }
+      porAlumno[key].total += Number(inv.cuota)
+      porAlumno[key].eventos.push({ eventoId: inv.evento_id, label: getEventoLabel(inv.evento_id), cuota: Number(inv.cuota) })
+    }
+
     const resumenPorAlumno = Object.values(porAlumno).sort((a, b) => b.total - a.total)
 
     // Resumen por evento
@@ -164,6 +182,14 @@ function Acusete() {
       porEvento[eventoId].total += Number(p.cuota)
       porEvento[eventoId].participantes.push({ nombre: alumnosMap[p.alumno_id] || 'Sin nombre', cuota: Number(p.cuota) })
     }
+
+    for (const inv of (externosData || []).filter((inv) => Number(inv.cuota) > 0)) {
+      const eventoId = inv.evento_id
+      if (!porEvento[eventoId]) porEvento[eventoId] = { eventoId, label: getEventoLabel(eventoId), total: 0, participantes: [] }
+      porEvento[eventoId].total += Number(inv.cuota)
+      porEvento[eventoId].participantes.push({ nombre: `${inv.nombre_invitado || 'Sin nombre'} (externo)`, cuota: Number(inv.cuota) })
+    }
+
     const resumenPorEvento = Object.values(porEvento).sort((a, b) => b.total - a.total)
 
     setResumenAlumnos(resumenPorAlumno)
