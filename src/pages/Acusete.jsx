@@ -167,7 +167,7 @@ function Acusete() {
     for (const inv of (externosData || []).filter((inv) => Number(inv.cuota) > 0)) {
       const nombre = `${inv.nombre_invitado || 'Sin nombre'} (externo)`
       const key = `externo_${inv.id}`
-      if (!porAlumno[key]) porAlumno[key] = { nombre, total: 0, eventos: [] }
+      if (!porAlumno[key]) porAlumno[key] = { nombre, total: 0, eventos: [], esExterno: true }
       porAlumno[key].total += Number(inv.cuota)
       porAlumno[key].eventos.push({ eventoId: inv.evento_id, label: getEventoLabel(inv.evento_id), cuota: Number(inv.cuota) })
     }
@@ -187,7 +187,7 @@ function Acusete() {
       const eventoId = inv.evento_id
       if (!porEvento[eventoId]) porEvento[eventoId] = { eventoId, label: getEventoLabel(eventoId), total: 0, participantes: [] }
       porEvento[eventoId].total += Number(inv.cuota)
-      porEvento[eventoId].participantes.push({ nombre: `${inv.nombre_invitado || 'Sin nombre'} (externo)`, cuota: Number(inv.cuota) })
+      porEvento[eventoId].participantes.push({ nombre: `${inv.nombre_invitado || 'Sin nombre'} (externo)`, cuota: Number(inv.cuota), esExterno: true })
     }
 
     const resumenPorEvento = Object.values(porEvento).sort((a, b) => b.total - a.total)
@@ -316,45 +316,58 @@ function Acusete() {
           )}
 
           {/* Vista por alumno */}
-          {vista === 'alumno' && (
-            <div>
-              {resumenAlumnos.length === 0 ? (
-                <p style={{ margin: '1rem 0 0' }}>No hay pagos pendientes.</p>
-              ) : (
-                resumenAlumnos.map((alumno, i) => (
-                  <div key={alumno.nombre}>
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setExpandedAlumnos((prev) => ({ ...prev, [alumno.nombre]: !prev[alumno.nombre] }))}
-                      onKeyDown={(e) => e.key === 'Enter' && setExpandedAlumnos((prev) => ({ ...prev, [alumno.nombre]: !prev[alumno.nombre] }))}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', cursor: 'pointer' }}
-                    >
-                      <span>{alumno.nombre}</span>
-                      <span style={{ fontWeight: '600' }}>${alumno.total.toLocaleString('es-CL')}</span>
-                    </div>
-                    {expandedAlumnos[alumno.nombre] && (
-                      <div style={{ paddingBottom: '0.5rem' }}>
-                        {alumno.eventos.map((ev, j) => (
-                          <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', paddingLeft: '0.75rem', paddingBottom: '0.25rem' }}>
-                            <span>{ev.label}</span>
-                            <span style={{ marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>${ev.cuota.toLocaleString('es-CL')}</span>
-                          </div>
-                        ))}
-                        {alumno.eventos.length > 1 && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', paddingLeft: '0.75rem', paddingTop: '0.25rem', borderTop: '1px solid #e8e8e8', marginTop: '0.1rem' }}>
-                            <span>Total</span>
-                            <span>${alumno.total.toLocaleString('es-CL')}</span>
-                          </div>
-                        )}
+          {vista === 'alumno' && (() => {
+            const regulares = resumenAlumnos.filter((a) => !a.esExterno)
+            const externos = resumenAlumnos.filter((a) => a.esExterno)
+            const renderFila = (alumno, i, lista) => (
+              <div key={alumno.nombre}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedAlumnos((prev) => ({ ...prev, [alumno.nombre]: !prev[alumno.nombre] }))}
+                  onKeyDown={(e) => e.key === 'Enter' && setExpandedAlumnos((prev) => ({ ...prev, [alumno.nombre]: !prev[alumno.nombre] }))}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', cursor: 'pointer' }}
+                >
+                  <span>{alumno.nombre}</span>
+                  <span style={{ fontWeight: '600' }}>${alumno.total.toLocaleString('es-CL')}</span>
+                </div>
+                {expandedAlumnos[alumno.nombre] && (
+                  <div style={{ paddingBottom: '0.5rem' }}>
+                    {alumno.eventos.map((ev, j) => (
+                      <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', paddingLeft: '0.75rem', paddingBottom: '0.25rem' }}>
+                        <span>{ev.label}</span>
+                        <span style={{ marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>${ev.cuota.toLocaleString('es-CL')}</span>
+                      </div>
+                    ))}
+                    {alumno.eventos.length > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', paddingLeft: '0.75rem', paddingTop: '0.25rem', borderTop: '1px solid #e8e8e8', marginTop: '0.1rem' }}>
+                        <span>Total</span>
+                        <span>${alumno.total.toLocaleString('es-CL')}</span>
                       </div>
                     )}
-                    {i < resumenAlumnos.length - 1 && <div style={{ borderBottom: '1px solid #e8e8e8' }} />}
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                )}
+                {i < lista.length - 1 && <div style={{ borderBottom: '1px solid #e8e8e8' }} />}
+              </div>
+            )
+            return (
+              <div>
+                {resumenAlumnos.length === 0 ? (
+                  <p style={{ margin: '1rem 0 0' }}>No hay pagos pendientes.</p>
+                ) : (
+                  <>
+                    {regulares.map((alumno, i) => renderFila(alumno, i, regulares))}
+                    {externos.length > 0 && (
+                      <>
+                        <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '0.25rem 0' }} />
+                        {externos.map((alumno, i) => renderFila(alumno, i, externos))}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Vista por cumpleaños */}
           {vista === 'evento' && (
@@ -374,22 +387,33 @@ function Acusete() {
                       <span>{evento.label}</span>
                       <span style={{ fontWeight: '600', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>${evento.total.toLocaleString('es-CL')}</span>
                     </div>
-                    {expandedEventos[evento.eventoId] && (
-                      <div style={{ paddingBottom: '0.5rem' }}>
-                        {evento.participantes.map((p, j) => (
-                          <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', paddingLeft: '0.75rem', paddingBottom: '0.25rem' }}>
-                            <span>{p.nombre}</span>
-                            <span>${p.cuota.toLocaleString('es-CL')}</span>
-                          </div>
-                        ))}
-                        {evento.participantes.length > 1 && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', paddingLeft: '0.75rem', paddingTop: '0.25rem', borderTop: '1px solid #e8e8e8', marginTop: '0.1rem' }}>
-                            <span>Total</span>
-                            <span>${evento.total.toLocaleString('es-CL')}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {expandedEventos[evento.eventoId] && (() => {
+                      const psReg = evento.participantes.filter((p) => !p.esExterno)
+                      const psExt = evento.participantes.filter((p) => p.esExterno)
+                      const renderP = (p, j) => (
+                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', paddingLeft: '0.75rem', paddingBottom: '0.25rem' }}>
+                          <span>{p.nombre}</span>
+                          <span>${p.cuota.toLocaleString('es-CL')}</span>
+                        </div>
+                      )
+                      return (
+                        <div style={{ paddingBottom: '0.5rem' }}>
+                          {psReg.map(renderP)}
+                          {psExt.length > 0 && (
+                            <>
+                              <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '0.1rem 0 0.1rem 0.75rem' }} />
+                              {psExt.map(renderP)}
+                            </>
+                          )}
+                          {evento.participantes.length > 1 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', paddingLeft: '0.75rem', paddingTop: '0.25rem', borderTop: '1px solid #e8e8e8', marginTop: '0.1rem' }}>
+                              <span>Total</span>
+                              <span>${evento.total.toLocaleString('es-CL')}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                     {i < resumenEventos.length - 1 && <div style={{ borderBottom: '1px solid #e8e8e8' }} />}
                   </div>
                 ))
